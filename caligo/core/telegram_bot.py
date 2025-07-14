@@ -62,7 +62,7 @@ class TelegramBot(CaligoBase):
             api_hash=api_hash,
             workdir="caligo",
             in_memory=False,
-            parse_mode=ParseMode.MARKDOWN,
+            parse_mode=ParseMode.DEFAULT,
         )
         self.client.storage = PersistentStorage(self.db)  # type: ignore
 
