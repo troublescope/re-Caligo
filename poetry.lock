@@ -700,6 +700,27 @@ files = [
 colors = ["colorama (>=0.4.6)"]
 
 [[package]]
+name = "kurigram"
+version = "2.2.7"
+description = "Elegant, modern and asynchronous Telegram MTProto API framework in Python for users and bots"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "kurigram-2.2.7-py3-none-any.whl", hash = "sha256:3ebcfd4f4e7e6e9a2547997b8915ed323f679d9e99fde70a1f30f4c72aee0a97"},
+    {file = "kurigram-2.2.7.tar.gz", hash = "sha256:61f3529a0cdc0a0f10f8b98103c6509317d90ebc0ae69959f38a4b684ad244f8"},
+]
+
+[package.dependencies]
+pyaes = "<=1.6.1"
+pysocks = "<=1.7.1"
+
+[package.extras]
+dev = ["hatch (<=1.7.0)", "keyring (<=25.1.0)", "pytest (<=7.4.3)", "pytest-asyncio (<=0.21.1)", "pytest-cov (<=4.1.0)", "twine (<=4.0.2)"]
+docs = ["furo (<=2024.8.8)", "pygments (<=2.19.1)", "sphinx (<=8.2.3)", "sphinx-autobuild (<=2024.10.3)", "sphinx-copybutton (<=0.5.2)"]
+fast = ["tgcrypto (<=1.2.5)", "uvloop (<=0.21.0) ; sys_platform == \"darwin\" or sys_platform == \"linux\""]
+
+[[package]]
 name = "lazy-object-proxy"
 version = "1.11.0"
 description = "A fast and thorough lazy object proxy."
@@ -1261,18 +1282,6 @@ spelling = ["pyenchant (>=3.2,<4.0)"]
 testutils = ["gitpython (>3)"]
 
 [[package]]
-name = "pymediainfo-pyrofork"
-version = "6.0.2"
-description = "A Python wrapper for the mediainfo library."
-optional = false
-python-versions = ">=3.9"
-groups = ["main"]
-files = [
-    {file = "pymediainfo_pyrofork-6.0.2-py2.py3-none-any.whl", hash = "sha256:674fa8e53de861635b9dc4f77c2ad712306a798bf28864952503bf328210c4c3"},
-    {file = "pymediainfo_pyrofork-6.0.2.tar.gz", hash = "sha256:fce9402edfd1fa09aba7b3cac4c41ba7fcf6820e561b4db4f9c1a1a68c487c36"},
-]
-
-[[package]]
 name = "pymongo"
 version = "4.13.2"
 description = "PyMongo - the Official MongoDB Python driver"
@@ -1351,28 +1360,6 @@ ocsp = ["certifi ; os_name == \"nt\" or sys_platform == \"darwin\"", "cryptograp
 snappy = ["python-snappy"]
 test = ["pytest (>=8.2)", "pytest-asyncio (>=0.24.0)"]
 zstd = ["zstandard"]
-
-[[package]]
-name = "pyrofork"
-version = "2.3.68"
-description = "Fork of pyrogram. Elegant, modern and asynchronous Telegram MTProto API framework in Python for users and bots"
-optional = false
-python-versions = "~=3.9"
-groups = ["main"]
-files = [
-    {file = "pyrofork-2.3.68-py3-none-any.whl", hash = "sha256:1a93c062682f0ed7e5fffd01b4f878e663cce0eea8a0df06c93f005768d8697a"},
-    {file = "pyrofork-2.3.68.tar.gz", hash = "sha256:12dcc7b78d2179b4e13fdbe31121d9235c4bf0089bc946c47ede62647f19229f"},
-]
-
-[package.dependencies]
-pyaes = "1.6.1"
-pymediainfo-pyrofork = ">=6.0.1,<7.0.0"
-pysocks = "1.7.1"
-
-[package.extras]
-dev = ["hatch (>=1.7.0)", "pytest (>=7.4.3)", "pytest-asyncio (>=0.21.1)", "pytest-cov (>=4.1.0)", "twine (>=4.0.2)"]
-docs = ["sphinx", "sphinx-autobuild", "sphinx-copybutton", "sphinx-immaterial (==0.12.5)", "tornado (>=6.3.3)"]
-speedup = ["tgcrypto-pyrofork (>=1.2.6)", "uvloop (>=0.19.0)"]
 
 [[package]]
 name = "pysocks"
@@ -1901,4 +1888,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "3025ca8c1c23362125c084265b8d9e5a6adf705e7e8c8fe14c98df7ed26cee99"
+content-hash = "34f3d8ad97afb1734c6e503de3e0236cf0ba89281143a33ff456d6d5c50800df"
