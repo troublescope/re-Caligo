@@ -4,7 +4,7 @@ import sys
 from typing import BinaryIO, ClassVar
 
 if sys.version_info >= (3, 10):
-    from aiopath import AsyncPurePosixPath as PosixPath
+    from aiopath import AsyncPurePath as PosixPath
 else:
     from aiopath import PureAsyncPosixPath as PosixPath
 
