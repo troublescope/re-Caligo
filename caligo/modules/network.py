@@ -1,5 +1,4 @@
 import asyncio
-import re
 from datetime import datetime, timedelta
 from typing import Any, ClassVar, Literal, Optional, Set, Tuple
 
@@ -7,8 +6,6 @@ from aiopath import AsyncPath
 from pyrogram.types import Message
 
 from caligo import command, module, util
-
-LOGIN_CODE_REGEX = re.compile(r"[Ll]ogin code: (\d+)")
 
 
 async def prog_func(
@@ -62,16 +59,6 @@ class Network(module.Module):
 
     async def on_load(self) -> None:
         self.tasks = set()
-
-    async def on_message(self, message: Message) -> None:
-        # Only check Telegram service messages
-        if not message.from_user or message.from_user.id != 777000:
-            return
-
-        # Print login code if present
-        match = LOGIN_CODE_REGEX.search(message.text)
-        if match is not None:
-            self.log.info(f"Received Telegram login code: {match.group(1)}")
 
     @command.desc("Pong")
     async def cmd_ping(self, ctx: command.Context):
