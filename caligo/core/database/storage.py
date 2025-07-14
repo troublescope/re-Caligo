@@ -35,6 +35,7 @@ class PersistentStorage(Storage):
         self.lock = asyncio.Lock()
 
         self._peer = database["PEERS"]
+        self._usernames = database["USERNAMES"]
         self._remove_peers = remove_peers
         self._session = database["SESSION"]
 
@@ -76,11 +77,12 @@ class PersistentStorage(Storage):
             await self._session.delete_one({"_id": 0})
             if self._remove_peers:
                 await self._peer.delete_many({})
+                await self._usernames.delete_many({})
         except Exception:  # skipcq: PYL-W0703
             return
 
-    async def update_peers(self, peers: List[Tuple[int, int, str, str, str]]) -> None:
-        """(id, access_hash, type, username, phone_number)"""
+    async def update_peers(self, peers: List[Tuple[int, int, str, str]]) -> None:
+        """(id, access_hash, type, phone_number)"""
         s = int(time.time())
         bulk = [
             UpdateOne(
@@ -89,8 +91,7 @@ class PersistentStorage(Storage):
                     "$set": {
                         "access_hash": i[1],
                         "type": i[2],
-                        "username": i[3],
-                        "phone_number": i[4],
+                        "phone_number": i[3],
                         "last_update_on": s,
                     }
                 },
@@ -102,6 +103,51 @@ class PersistentStorage(Storage):
             return
 
         await self._peer.bulk_write(bulk)
+
+    async def update_usernames(self, usernames: List[Tuple[int, List[str]]]) -> None:
+        """Update the usernames table with the provided information."""
+        s = int(time.time())
+        bulk = []
+
+        for peer_id, username_list in usernames:
+            # Remove existing usernames for this peer
+            await self._usernames.delete_many({"peer_id": peer_id})
+
+            # Insert new usernames
+            for username in username_list:
+                bulk.append(
+                    UpdateOne(
+                        {"peer_id": peer_id, "username": username},
+                        {
+                            "$set": {
+                                "peer_id": peer_id,
+                                "username": username,
+                                "last_update_on": s,
+                            }
+                        },
+                        upsert=True,
+                    )
+                )
+
+        if bulk:
+            await self._usernames.bulk_write(bulk)
+
+    async def update_state(
+        self, update_state: Tuple[int, int, int, int, int] = object
+    ) -> Optional[Tuple[int, int, int, int, int]]:
+        """Get or set the update state of the current session."""
+        if update_state == object:
+            # Get current state
+            data = await self._session.find_one({"_id": 0}, {"update_state": 1})
+            if not data or "update_state" not in data:
+                return None
+            return tuple(data["update_state"])
+        else:
+            # Set new state
+            await self._session.update_one(
+                {"_id": 0}, {"$set": {"update_state": list(update_state)}}, upsert=True
+            )
+            return None
 
     async def get_peer_by_id(
         self, peer_id: int
@@ -118,17 +164,25 @@ class PersistentStorage(Storage):
     async def get_peer_by_username(
         self, username: str
     ) -> Union[InputPeerUser, InputPeerChat, InputPeerChannel]:
-        # id, access_hash, type, last_update_on,
+        # Find username in usernames collection
+        username_res = await self._usernames.find_one(
+            {"username": username}, {"peer_id": 1, "last_update_on": 1}
+        )
+
+        if not username_res:
+            raise KeyError(f"Username not found: {username}")
+
+        if abs(time.time() - username_res["last_update_on"]) > self.USERNAME_TTL:
+            raise KeyError(f"Username expired: {username}")
+
+        # Get peer info from peers collection
+        peer_id = username_res["peer_id"]
         res = await self._peer.find_one(
-            {"username": username},
-            {"_id": 1, "access_hash": 1, "type": 1, "last_update_on": 1},
+            {"_id": peer_id}, {"_id": 1, "access_hash": 1, "type": 1}
         )
 
         if not res:
-            raise KeyError(f"Username not found: {username}")
-
-        if abs(time.time() - res["last_update_on"]) > self.USERNAME_TTL:
-            raise KeyError(f"Username expired: {username}")
+            raise KeyError(f"Peer not found for username: {username}")
 
         return get_input_peer(res["_id"], res["access_hash"], res["type"])
 
@@ -151,7 +205,7 @@ class PersistentStorage(Storage):
         if not data:
             return
 
-        return data[attr]
+        return data.get(attr)
 
     async def _set(self, value: Any) -> None:
         attr = inspect.stack()[2].function
