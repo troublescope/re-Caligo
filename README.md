@@ -1,29 +1,30 @@
-<h1 align="center">Caligo</h1>
+<h1 align="center">RE-CALIGO a.k.a (Returned Extended Caligo)</h1>
+<h3 align="center">A Modern, Powerful Userbot Framework — Rebuilt for the Next Era</h3>
 
 A SelfBot for Telegram made with Python using [Pyrogram](https://github.com/pyrogram/pyrogram) library. It's highly inspired from [pyrobud](https://github.com/kdrag0n/pyrobud) that writtens in [Telethon](https://github.com/LonamiWebs/Telethon) library.
 It's the same but different, you know what i mean?
 
-Caligo needs **Python 3.12** or newer to run.
+RE-CALIGO needs **Python 3.12** or newer to run.
 
 ## Compatibility
 
-Caligo should work with all Linux-based operating systems.
+RE-CALIGO should work with all Linux-based operating systems.
 
 This program tested partially on MacOs M1 and not officially support for windows.
 
 ## Installation
 
-Caligo uses MongoDB Atlas for it database, you can get it free at <https://www.mongodb.com/> and save the uri for use on config and to generate your session.
+RE-CALIGO uses MongoDB Atlas for it database, you can get it free at <https://www.mongodb.com/> and save the uri for use on config and to generate your session.
 
 Obviously you need git, and it should be already installed on major operating systems linux based.
 
 ### Local
 
-First, clone this Git repository locally: `git clone https://github.com/userbotindo/caligo`
+First, clone this Git repository locally: `git clone https://github.com/troublescope/re-Caligo.git`
 
 After that, you can run `python3 -m pip install .` to install the bot along with the depencies.
 
-Once it's installed, you can choose to invoke it using the `caligo` command, or run the bot in-place (which is described later in the Usage section). Running it in-place is recommended to allow for automatic updates via Git.
+Once it's installed, you can choose to invoke it using the `RE-CALIGO` command, or run the bot in-place (which is described later in the Usage section). Running it in-place is recommended to allow for automatic updates via Git.
 
 #### Error: Directory '.' is not installable. File 'setup.py' not found.
 
@@ -83,4 +84,4 @@ To start the bot, type `python3 main.py` or `python3 -m caligo` if you are runni
 
 ## Support
 
-Feel free to join the official support group on Telegram for help or general discussion regarding the bot. You may also open an [issue](https://github.com/adekmaulana/caligo/issues) on GitHub for bugs, suggestions, or anything else relevant to the project.
+Feel free to join the official support group on Telegram for help or general discussion regarding the bot. You may also open an [issue](https://github.com/troublescope/re-caligo/issues) on GitHub for bugs, suggestions, or anything else relevant to the project.
