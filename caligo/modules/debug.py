@@ -201,14 +201,33 @@ class Debug(module.Module):
 <pre language="python">{escape(out)}</pre>
 
 Time: {el_str}"""
-        if len(respond_text) > 4096:
-            with io.BytesIO(str.encode(out)) as out_file:
-                out_file.name = "eval.text"
-                await ctx.msg.reply_document(
-                    document=out_file, caption=code, disable_notification=True
-                )
 
-            return None
+        if len(respond_text) > 2048:
+            data = ""
+            if len(code) > 1024:
+                code = code[:1024] + "..."
+                data += f"Input:\n{code}"
+
+            if len(out) > 1024:
+                async with self.bot.http.post(
+                    "https://paste.rs", data=out.encode()
+                ) as resp:
+                    paste_url = await resp.text()
+
+                out = out[:1024] + "..."
+                if data:
+                    data += f"\n\nOutput:\n{out}"
+
+                else:
+                    data = out
+
+            respond_text = f"""{prefix}<b>Input</b>:
+<pre language="python">{escape(code)}</pre>
+<b>Output</b>:
+<pre language="python">{escape(out)}</pre>
+<blockquote><b><a href={paste_url}>More...</a></b></blockquote>
+
+Time: {el_str}"""
 
         await ctx.respond(
             respond_text,
