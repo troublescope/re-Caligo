@@ -135,30 +135,6 @@ class System(module.Module):
 
         return status
 
-    @command.desc("Get information about the host system")
-    @command.alias("si")
-    async def cmd_sysinfo(self, ctx: command.Context) -> Optional[str]:
-        await ctx.respond("Collecting system information...")
-
-        try:
-            stdout, _, ret = await util.system.run_command(
-                "neofetch", "--stdout", timeout=60
-            )
-        except asyncio.TimeoutError:
-            return "🕑 `neofetch` failed to finish within 1 minute."
-        except FileNotFoundError:
-            return (
-                "❌ [neofetch](https://github.com/dylanaraps/neofetch) "
-                "must be installed on the host system."
-            )
-
-        err = f"⚠️ Return code: {ret}" if ret != 0 else ""
-        sysinfo = "\n".join(stdout.split("\n")[2:]) if ret == 0 else stdout
-        await ctx.respond(
-            f"""<pre language="bash">{escape(sysinfo)}</pre>{err}""",
-            parse_mode=ParseMode.HTML,
-        )
-
     @command.desc("Run a snippet in a shell")
     @command.usage("[shell snippet]")
     @command.alias("sh")
