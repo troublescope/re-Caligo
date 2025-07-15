@@ -41,7 +41,7 @@ class Debug(module.Module):
         if ctx.msg.chat.id:
             lines.append(f"Chat ID: `{ctx.msg.chat.id}`")
 
-        if ctx.msg.is_topic_message:
+        if ctx.msg.chat.is_forum:
             lines.append(f"Chat topic ID: `{ctx.msg.message_thread_id}`")
 
         lines.append(f"My user ID: `{self.bot.uid}`")
