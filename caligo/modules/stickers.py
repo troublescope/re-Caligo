@@ -391,11 +391,9 @@ class Sticker(module.Module):
                 set_name,
                 set_title,
                 emoji=emoji,
-                sticker_type="animated"
-                if animation
-                else "video"
-                if video
-                else "static",
+                sticker_type=(
+                    "animated" if animation else "video" if video else "static"
+                ),
             )
         else:
             await ctx.respond("Copying sticker...")
