@@ -133,6 +133,8 @@ class Debug(module.Module):
                 "user": (ctx.msg.reply_to_message or ctx.msg).from_user,
                 "db": self.bot.db,
                 "http": self.bot.http,
+                "replied": ctx.reply_msg,
+                "user": (ctx.reply_msg or ctx.msg).from_user,
                 # Helper functions
                 "send": send,
                 "print": _print,
