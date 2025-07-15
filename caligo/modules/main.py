@@ -35,7 +35,7 @@ class Main(module.Module):
 
     @command.desc("List the commands")
     @command.usage("[filter: command or module name?]", optional=True)
-    async def cmd_help(self, ctx: command.Context):
+    async def cmd_help(self, ctx: command.Context) -> str:
         filt = ctx.input
         modules: MutableMapping[str, MutableMapping[str, str]] = defaultdict(dict)
 
@@ -56,14 +56,18 @@ class Main(module.Module):
                     if cmd.usage_reply:
                         args_desc += " (also accepts replies)"
 
-                return (
-                    f"<b><code>{cmd.name}</code></b>: {cmd.desc or '<i>No description provided.</i>'}<br>"
-                    f"<b>Module:</b> {cmd.module.name}<br>"
-                    f"<b>Aliases:</b> {aliases}<br>"
-                    f"<b>Expected parameters:</b> {args_desc}"
+                return util.text.join_map(
+                    {
+                        "Command": f"<code>{cmd.name}</code>",
+                        "Description": cmd.desc or "<i>No description provided.</i>",
+                        "Module": cmd.module.name,
+                        "Aliases": aliases,
+                        "Expected parameters": args_desc,
+                    },
+                    parse_mode="html",
                 )
 
-            return "<i>That filter didn’t match any commands or modules.</i>"
+            return "<i>That filter didn't match any commands or modules.</i>"
 
         # Gather full help
         for name, cmd in self.bot.commands.items():
@@ -86,9 +90,7 @@ class Main(module.Module):
 
         # Final full expandable blockquote
         full_response = "\n\n".join(response_sections)
-        wrapped = f"<blockquote expandable>\n{full_response}\n</blockquote>"
-
-        await ctx.respond_multi(wrapped, parse_mode=ParseMode.HTML)
+        return f"<blockquote expandable>\n{full_response}\n</blockquote>"
 
     @command.desc("Get or change this bot prefix")
     @command.alias("setprefix", "getprefix")
