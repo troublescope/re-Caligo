@@ -92,7 +92,7 @@ class Debug(module.Module):
 
     @command.desc("Evaluate code")
     @command.usage("[code snippet]")
-    @command.alias("exec")
+    @command.alias("exec", "e")
     async def cmd_eval(self, ctx: command.Context) -> Optional[str]:
         code = ctx.input
         if not code:
@@ -120,6 +120,7 @@ class Debug(module.Module):
                 "bot": self.bot,
                 "loop": self.bot.loop,
                 "client": self.bot.client,
+                "helper": self.bot.client_helper,
                 "commands": self.bot.commands,
                 "listeners": self.bot.listeners,
                 "modules": self.bot.modules,
@@ -139,7 +140,11 @@ class Debug(module.Module):
                 "sys": sys,
                 "traceback": traceback,
                 # Third-party modules
+                # Pyrogram
                 "pyrogram": pyrogram,
+                "enums": pyrogram.enums,
+                "types": pyrogram.types,
+                "raw": pyrogram.raw,
                 # Bot
                 "command": command,
                 "module": module,
