@@ -113,6 +113,7 @@ class Context:
     segments: Sequence[str]
     cmd_len: int
     invoker: str
+    flags: dict[str, Any]
 
     last_update_time: Optional[datetime]
 
@@ -127,6 +128,7 @@ class Context:
         bot: "Caligo",
         message: Message,
         cmd_len: int,
+        flags: Optional[dict[str, Any]] = None,
     ) -> None:
         self.bot = bot
         self.chat = message.chat
@@ -144,6 +146,48 @@ class Context:
 
         self.input = self.msg.text[self.cmd_len :]
 
+        # Parse flags from command if not provided
+        if flags is None:
+            self.flags = self._parse_flags()
+        else:
+            self.flags = flags
+
+    def _parse_flags(self) -> dict[str, Any]:
+        """Parse flags from command segments (e.g., --flag value or -f)"""
+        flags = {}
+        args = list(self.segments[1:])  # Skip command name
+        i = 0
+
+        while i < len(args):
+            arg = args[i]
+
+            # Long flag format: --flag or --flag=value
+            if arg.startswith("--"):
+                flag_name = arg[2:]
+                if "=" in flag_name:
+                    key, value = flag_name.split("=", 1)
+                    flags[key] = value
+                else:
+                    # Check if next argument is a value
+                    if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                        flags[flag_name] = args[i + 1]
+                        i += 1  # Skip the value
+                    else:
+                        flags[flag_name] = True  # Boolean flag
+
+            # Short flag format: -f or -f value
+            elif arg.startswith("-") and len(arg) > 1:
+                flag_name = arg[1:]
+                if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                    flags[flag_name] = args[i + 1]
+                    i += 1  # Skip the value
+                else:
+                    flags[flag_name] = True  # Boolean flag
+
+            i += 1
+
+        return flags
+
     def __getattr__(self, name: str) -> Any:
         if name == "args":
             return self._get_args()
@@ -154,7 +198,35 @@ class Context:
 
     # Argument segments
     def _get_args(self) -> Sequence[str]:
-        self.args = self.segments[1:]
+        """Get arguments, filtering out flags"""
+        # Filter out flag arguments and their values
+        args = []
+        segments = list(self.segments[1:])  # Skip command name
+        i = 0
+
+        while i < len(segments):
+            arg = segments[i]
+
+            # Skip flag arguments
+            if arg.startswith("--"):
+                flag_name = arg[2:]
+                if "=" not in flag_name:
+                    # Check if next argument is a value for this flag
+                    if i + 1 < len(segments) and not segments[i + 1].startswith("-"):
+                        i += 1  # Skip the value too
+
+            elif arg.startswith("-") and len(arg) > 1:
+                # Check if next argument is a value for this flag
+                if i + 1 < len(segments) and not segments[i + 1].startswith("-"):
+                    i += 1  # Skip the value too
+
+            else:
+                # Regular argument
+                args.append(arg)
+
+            i += 1
+
+        self.args = args
         return self.args
 
     async def _delete(
@@ -192,9 +264,9 @@ class Context:
             input_arg=self.input,
             mode=mode,
             redact=redact,
-            response=self.response
-            if reuse_response and mode == self.response_mode
-            else None,
+            response=(
+                self.response if reuse_response and mode == self.response_mode else None
+            ),
             **kwargs,
         )
         self.response_mode = mode
