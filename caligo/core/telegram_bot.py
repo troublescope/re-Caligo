@@ -111,7 +111,15 @@ class TelegramBot(CaligoBase):
         async with asyncio.Lock():
             await self.client.start()
             if self.helper_initialized:
-                await self.client_helper.start()
+                try:
+                    await self.client_helper.start()
+                except (AuthKeyDuplicated, AuthKeyInvalid, AuthKeyUnregistered) as e:
+                    self.log.exception(
+                        "Your helper session is invalid, please do restart!", exc_info=e
+                    )
+                    await self.db[f"{self.client_helper.name}_SESSION"].delete_one(
+                        {"_id": 0}
+                    )
 
             user = await self.client.get_me()
             if not isinstance(user, User):
@@ -176,7 +184,7 @@ class TelegramBot(CaligoBase):
                 )
 
                 # Delete session from DB
-                await self.db["SESSION"].delete_one({"_id": 0})
+                await self.db[f"{self.client.name}_SESSION"].delete_one({"_id": 0})
                 return
 
             await self.idle()
