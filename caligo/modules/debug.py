@@ -7,6 +7,7 @@ import traceback
 from html import escape
 from typing import Any, ClassVar, Optional, Tuple
 
+import aiopath
 import pyrogram
 from meval import meval
 from pyrogram.enums import ParseMode
@@ -146,6 +147,8 @@ class Debug(module.Module):
                 "enums": pyrogram.enums,
                 "types": pyrogram.types,
                 "raw": pyrogram.raw,
+                # Aiopath
+                "path": aiopath.AsyncPath,
                 # Bot
                 "command": command,
                 "module": module,
