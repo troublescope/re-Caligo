@@ -130,6 +130,7 @@ class Debug(module.Module):
                 "msg": ctx.msg,
                 "message": ctx.msg,
                 "db": self.bot.db,
+                "http": self.bot.http,
                 # Helper functions
                 "send": send,
                 "print": _print,
