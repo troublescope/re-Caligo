@@ -18,21 +18,6 @@ class Main(module.Module):
     async def on_load(self) -> None:
         self.db = self.bot.db[self.name.upper()]
 
-    async def on_stop(self) -> None:
-        file = AsyncPath("caligo/caligo_helper.session")
-        if not await file.exists():
-            return
-
-        await self.bot.db.get_collection("SESSION_HELPER").update_one(
-            {
-                "_id": sha256(
-                    str(self.bot.config["telegram"]["api_id"]).encode()
-                ).hexdigest()
-            },
-            {"$set": {"session": Binary(await file.read_bytes())}},
-            upsert=True,
-        )
-
     @command.desc("List the commands")
     @command.usage("[filter: command or module name?]", optional=True)
     async def cmd_help(self, ctx: command.Context) -> str:
