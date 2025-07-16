@@ -1,14 +1,17 @@
 import asyncio
 import signal
 from functools import partial
-from hashlib import sha256
 from typing import TYPE_CHECKING, Any, List, Optional, Type, Union
 
-from aiopath import AsyncPath
 from pyrogram import filters as filt
 from pyrogram.client import Client
 from pyrogram.enums import ParseMode
-from pyrogram.errors import AuthKeyDuplicated, AuthKeyInvalid, AuthKeyUnregistered
+from pyrogram.errors import (
+    AuthKeyDuplicated,
+    AuthKeyInvalid,
+    AuthKeyUnregistered,
+    SessionRevoked,
+)
 from pyrogram.handlers.callback_query_handler import CallbackQueryHandler
 from pyrogram.handlers.deleted_messages_handler import DeletedMessagesHandler
 from pyrogram.handlers.inline_query_handler import InlineQueryHandler
@@ -178,7 +181,12 @@ class TelegramBot(CaligoBase):
             except KeyboardInterrupt:
                 self.log.warning("Received interrupt while connecting")
                 return
-            except (AuthKeyDuplicated, AuthKeyInvalid, AuthKeyUnregistered) as e:
+            except (
+                AuthKeyDuplicated,
+                AuthKeyInvalid,
+                AuthKeyUnregistered,
+                SessionRevoked,
+            ) as e:
                 self.log.exception(
                     "Your session is invalid, please regenerate it", exc_info=e
                 )
