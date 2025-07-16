@@ -59,7 +59,7 @@ async def create_session() -> None:
     db = db_client.get_database("CALIGO")
 
     # Set the persistent storage for the Pyrogram client using the database
-    client.storage = database.storage.PersistentStorage(db)  # type: ignore
+    client.storage = database.storage.PersistentStorage("caligo_SESSION", db)  # type: ignore
 
     print("Generating session...")
 
