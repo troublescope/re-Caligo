@@ -6,12 +6,13 @@ services:
     container_name: caligo
     environment:
       - TZ=Asia/Jakarta
-      - DB_URI=mongodb://caligo:mypasswd@mongo:27017/caligo
+      - DB_URI=mongodb://caligo:mypasswd@mongo:27017/caligo?authSource=admin&retryWrites=true
     depends_on:
       - mongo
 
   mongo:
     image: "mongo:latest"
+    restart: unless-stopped
     container_name: caligo_mongodb
     volumes:
       - "mongo_caligo:/data/db"
