@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING, Any
 
-CaligoBase: Any
+__all__ = ["CaligoBase"]
+
 if TYPE_CHECKING:
     from .bot import Caligo
 
@@ -8,4 +9,4 @@ if TYPE_CHECKING:
 else:
     import abc
 
-    CaligoBase = abc.ABC
+    CaligoBase: Any = abc.ABC
