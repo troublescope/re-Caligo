@@ -4,7 +4,7 @@
 
 [tool.poetry]
 name = "caligo"
-version = "1.0.0"
+version = "1.5.0"
 description = "selfbot for Telegram."
 authors = ["Adek Maulana <adek@techdro.id>"]
 license = "MIT"
@@ -29,7 +29,7 @@ classifiers = [
 caligo = "caligo.main:main"
 
 [tool.poetry.urls]
-"Bug Tracker" = "https://github.com/adekmaulana/caligo/issues"
+"Bug Tracker" = "https://github.com/troublescope/re-caligo/issues"
 "Community" = ""
 
 [tool.poetry.dependencies]
