@@ -1,6 +1,11 @@
-version: '3.9'
+
 services:
   caligo:
     build:
       context: .
-    restart: always
+    restart: unless-stopped
+    container_name: caligo
+    environment:
+      - TZ=Asia/Jakarta
+    volumes:
+      - .:/app
