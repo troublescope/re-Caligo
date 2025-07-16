@@ -22,10 +22,13 @@ class Main(module.Module):
     async def extract_inline_id(self, inline_id: str) -> tuple[int, int]:
         unpacked = await util.run_sync(unpack_inline_message_id, inline_id)
         return (
-            None
-            if unpacked.owner_id == self.bot.uid
-            else await util.run_sync(get_channel_id, abs(unpacked.owner_id))
-        ), unpacked.id
+            (
+                unpacked.owner_id
+                if unpacked.owner_id == self.bot.uid
+                else await util.run_sync(get_channel_id, abs(unpacked.owner_id))
+            ),
+            unpacked.id,
+        )
 
     def build_button(self) -> List[List[types.InlineKeyboardButton]]:
         modules = list(self.bot.modules.keys())
@@ -157,6 +160,7 @@ class Main(module.Module):
     @command.desc("List the commands")
     @command.usage("[filter: command or module name?]", optional=True)
     async def cmd_help(self, ctx: command.Context) -> str:
+        await ctx.respond("<i>Processing...</i>")
         filt = ctx.input
         modules: MutableMapping[str, MutableMapping[str, str]] = defaultdict(dict)
         if self.bot.helper_initialized and not filt:
