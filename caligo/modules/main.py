@@ -307,4 +307,4 @@ class Main(module.Module):
             parse_mode="html",
         )
 
-        await ctx.respond(response, parse_mode=ParseMode.HTML)
+        await ctx.respond(response, parse_mode=enums.ParseMode.HTML)
