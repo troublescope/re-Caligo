@@ -116,7 +116,12 @@ class TelegramBot(CaligoBase):
             if self.helper_initialized:
                 try:
                     await self.client_helper.start()
-                except (AuthKeyDuplicated, AuthKeyInvalid, AuthKeyUnregistered) as e:
+                except (
+                    AuthKeyDuplicated,
+                    AuthKeyInvalid,
+                    AuthKeyUnregistered,
+                    SessionRevoked,
+                ) as e:
                     self.log.exception(
                         "Your helper session is invalid, please do restart!", exc_info=e
                     )
