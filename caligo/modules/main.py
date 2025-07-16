@@ -119,7 +119,7 @@ class Main(module.Module):
                 await query.answer("😿️ Couldn't close message")
                 await query.edit_message_text(
                     "<b>Caligo Menu Helper</b>",
-                    reply_markup=InlineKeyboardMarkup(button[:-1]),
+                    reply_markup=types.InlineKeyboardMarkup(button[:-1]),
                 )
 
             return
