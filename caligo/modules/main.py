@@ -1,7 +1,7 @@
 import platform
 import uuid
 from collections import defaultdict
-from typing import ClassVar, Dict, List, MutableMapping
+from typing import ClassVar, List, MutableMapping
 
 from pyrogram import errors, filters, types
 from pyrogram.utils import get_channel_id, unpack_inline_message_id
@@ -12,12 +12,11 @@ from caligo.core import database
 
 class Main(module.Module):
     name: ClassVar[str] = "Main"
-    cache: Dict[int, int]
     db: database.AsyncCollection
 
     async def on_load(self) -> None:
         self.db = self.bot.db[self.name.upper()]
-        self.cache = {}
+
         self.repo = self.bot.config["bot"]["git_url"]
 
     async def extract_inline_id(self, inline_id: str) -> tuple[int, int]:
@@ -88,7 +87,7 @@ class Main(module.Module):
                 )
             )
 
-            return await query.answer(results=answer, cache_time=3)
+            return await query.answer(results=answer, cache_time=5)
 
     @listener.filters(filters.regex(r"menu\((\w+)\)$"))
     async def on_callback_query(self, query: types.CallbackQuery) -> None:
