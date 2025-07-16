@@ -1,4 +1,3 @@
-
 services:
   caligo:
     build:
@@ -7,3 +6,18 @@ services:
     container_name: caligo
     environment:
       - TZ=Asia/Jakarta
+      - DB_URI=mongodb://caligo:mypasswd@mongo:27017/caligo
+    depends_on:
+      - mongo
+
+  mongo:
+    image: "mongo:latest"
+    container_name: caligo_mongodb
+    volumes:
+      - "mongo_caligo:/data/db"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: caligo
+      MONGO_INITDB_ROOT_PASSWORD: mypasswd
+
+volumes:
+  mongo_caligo:

@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 try:
@@ -14,6 +15,12 @@ if not config_path.exists():
 else:
     with config_path.open(mode="rb") as f:
         config = tomllib.load(f)
+
+# Inject db_uri from environment if available
+if config:
+    db_uri = os.getenv("DB_URI")
+    if db_uri:
+        config["bot"]["db_uri"] = db_uri
 
 log.setup_log(config["bot"]["colorlog"] if config else False)
 
