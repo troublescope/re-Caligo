@@ -1,10 +1,7 @@
 import platform
 from collections import defaultdict
-from hashlib import sha256
 from typing import ClassVar, MutableMapping
 
-from aiopath import AsyncPath
-from bson.binary import Binary
 from pyrogram.enums import ParseMode
 
 from caligo import __version__, command, module, util
@@ -92,7 +89,7 @@ class Main(module.Module):
         return f"<b>Prefix set to:</b> <code>{self.bot.prefix}</code>"
 
     @command.desc("Get information about this bot instance")
-    @command.alias("botinfo", "binfo", "bi", "i")
+    @command.alias("botinfo")
     async def cmd_info(self, ctx: command.Context) -> None:
         commit = await util.run_sync(util.version.get_commit)
         dirty = ", dirty" if await util.run_sync(util.git.is_dirty) else ""
@@ -140,7 +137,7 @@ class Main(module.Module):
                 "Events activated": f"{self.bot.events_activated}\n",
                 "Chats": num_chats,
             },
-            heading='<a href="https://github.com/adekmaulana/caligo">Caligo</a> info',
+            heading='<a href="https://github.com/troublescope/re-caligo">RE-Caligo</a> info',
             parse_mode="html",
         )
 
