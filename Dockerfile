@@ -1,5 +1,5 @@
 # Build Python package and dependencies
-FROM python:3.11-alpine AS python-build
+FROM python:3.12-alpine AS python-build
 RUN apk add --no-cache \
         git \
         libffi-dev \
@@ -30,14 +30,13 @@ RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
 # Package everything
-FROM python:3.11-alpine AS final
+FROM python:3.12-alpine AS final
 # Update system first
 RUN apk update
 
 # Install optional native tools (for full functionality)
 RUN apk add --no-cache \
         curl \
-        neofetch \
         git \
         nss
 # Install native dependencies
