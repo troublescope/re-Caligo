@@ -8,4 +8,4 @@ services:
     environment:
       - TZ=Asia/Jakarta
     volumes:
-      - .:/app
+      - ./data:/caligo/data
