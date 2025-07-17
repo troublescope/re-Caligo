@@ -106,7 +106,7 @@ class Main(module.Module):
                     "<b>Caligo Menu Helper</b>",
                     reply_markup=types.InlineKeyboardMarkup(button),
                 )
-            except FloodWait as e:
+            except errors.FloodWait as e:
                 await asyncio.sleep(e.x)
             return
 
