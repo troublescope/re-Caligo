@@ -3,6 +3,8 @@
 # Get this value from https://my.telegram.org/apps
 api_id = 123 # Client API ID used for authentication
 api_hash = "12345678" # Client API hash used for authentication
+session_string = "" # You can pass this, or just leave it blank.
+
 # ---- OPTIONAL ---- #
 [telegram.helper]
 # Bot token used for helper

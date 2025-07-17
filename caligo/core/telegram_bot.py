@@ -57,17 +57,18 @@ class TelegramBot(CaligoBase):
     async def init_client(self: "Caligo") -> None:
         api_id = self.config["telegram"]["api_id"]
         api_hash = self.config["telegram"]["api_hash"]
+        session_string = self.config["telegram"]["session_string"]
 
         # Initialize Telegram client with gathered parameters
         self.client = Client(
-            name="caligo",
+            name := "caligo",
             api_id=api_id,
             api_hash=api_hash,
             workdir="caligo",
-            in_memory=False,
+            session_string=session_string,
             parse_mode=ParseMode.DEFAULT,
+            storage_engine=PersistentStorage(name, self.db),  # type: ignore
         )
-        self.client.storage = PersistentStorage(self.client.name, self.db)  # type: ignore
 
         self.prefix = self.config["bot"]["prefix"]
         # Override default prefix if found any saved in database
@@ -79,13 +80,13 @@ class TelegramBot(CaligoBase):
         bot_token = self.config["telegram"]["helper"].get("token")
         if bot_token:
             self.client_helper = Client(
-                name="caligo_helper",
+                name := "caligo_helper",
                 api_id=api_id,
                 api_hash=api_hash,
                 bot_token=bot_token,
                 workdir="caligo",
+                storage_engine=PersistentStorage(name, self.db),  # type: ignore
             )
-            self.client_helper.storage = PersistentStorage(self.client_helper.name, self.db)  # type: ignore
 
     async def start(self: "Caligo") -> None:
         self.log.info("Starting")
