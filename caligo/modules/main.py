@@ -3,7 +3,7 @@ import uuid
 from collections import defaultdict
 from typing import ClassVar, List, MutableMapping
 
-from pyrogram import errors, filters, types
+from pyrogram import enums, errors, filters, types
 from pyrogram.utils import get_channel_id, unpack_inline_message_id
 
 from caligo import __version__, command, listener, module, util
@@ -51,6 +51,7 @@ class Main(module.Module):
         return buttons
 
     async def on_inline_query(self, query: types.InlineQuery) -> None:
+
         answer = [
             types.InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
@@ -167,7 +168,7 @@ class Main(module.Module):
             response: Any
             try:
                 response = await self.bot.client.get_inline_bot_results(
-                    self.bot.client_helper.me.username
+                    bot=self.bot.client_helper.me.username,
                 )
             except errors.BotInlineDisabled:
                 return "<i>Bot Inline Disabled</i>"
