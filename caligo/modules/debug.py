@@ -217,9 +217,10 @@ class Debug(module.Module):
     @command.usage("[code snippet]")
     @command.alias("exec", "e")
     async def cmd_eval(self, ctx: command.Context) -> Optional[str]:
-        code = ctx.input
-        if not code:
+        if not ctx.input:
             return "Give me code to evaluate."
+
+        code = ctx.msg.content.markdown.split(maxsplit=1)[1]
 
         out_buf = io.StringIO()
 
@@ -303,12 +304,11 @@ class Debug(module.Module):
         if out.endswith("\n"):
             out = out[:-1]
 
-        respond_text = f"""{prefix}<b>Input</b>:
-<pre language="python">{escape(code)}</pre>
-<b>Output</b>:
-<pre language="python">{escape(out)}</pre>
-
-Time: {el_str}"""
+        respond_text = f"""{prefix}Input:
+<code>{escape(code)}</code>\n
+Output:
+<code>{escape(out)}</code>\n\n
+<b>{el_str}</b>"""
 
         if len(respond_text) > 2048:
             data = ""
@@ -329,13 +329,11 @@ Time: {el_str}"""
                 else:
                     data = out
 
-            respond_text = f"""{prefix}<b>Input</b>:
-<pre language="python">{escape(code)}</pre>
-<b>Output</b>:
-<pre language="python">{escape(out)}</pre>
-<blockquote><b><a href={paste_url}>More...</a></b></blockquote>
-
-Time: {el_str}"""
+            respond_text = f"""{prefix}<b>In</b>:
+<code>{escape(code)}</code>\n
+Out:
+<code>{escape(out)}</code>\n\n
+<b><a href={paste_url}>{el_str}</a></b>"""
 
         await ctx.respond(
             respond_text,
