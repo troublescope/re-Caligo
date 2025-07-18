@@ -757,18 +757,6 @@ files = [
 ]
 
 [[package]]
-name = "meval"
-version = "2.5"
-description = "Performs async evaluations of strings"
-optional = false
-python-versions = ">=3.5"
-groups = ["main"]
-files = [
-    {file = "meval-2.5-py3-none-any.whl", hash = "sha256:24430865001b5596864a7c28f423294edadaac57af9ab6964dda3eabc8762577"},
-    {file = "meval-2.5.tar.gz", hash = "sha256:a5aa481617f1fd07a5972076cd3aa14e38515ac84b3ff028efdf76371a856765"},
-]
-
-[[package]]
 name = "multidict"
 version = "6.6.3"
 description = "multidict implementation"
@@ -1888,4 +1876,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "a4b085b6f8024f0e4f71f98d9346f59cd31027428d502baba77516cff75be033"
+content-hash = "96bef2fa00b38ba27a44571b6bdf6b4699fa90949462ae524d8570b986325062"
