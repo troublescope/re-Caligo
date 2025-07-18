@@ -308,7 +308,7 @@ class Debug(module.Module):
 <code>{escape(code)}</code>\n
 Output:
 <code>{escape(out)}</code>\n
-<b>{el_str} elapsed</b>"""
+<b>⏱ {el_str}</b>"""
 
         if len(respond_text) > 2048:
             data = ""
@@ -333,7 +333,7 @@ Output:
 <code>{escape(code)}</code>\n
 Out:
 <code>{escape(out)}</code>\n
-<b><a href={paste_url}>{el_str} elapsed</a></b>"""
+<b><a href={paste_url}>⏱ {el_str}</a></b>"""
 
         await ctx.respond(
             respond_text,
