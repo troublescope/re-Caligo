@@ -251,10 +251,11 @@ class Sticker(module.Module):
         await ctx.respond(
             "Creating sticker pack..." if not sticker else "__Copying sticker...__"
         )
-        func = self.create_pack if not sticker else self.add_sticker
-        success, result = await func(
-            data, set_name, set_title if not sticker else emoji, emoji=emoji
-        )
+
+        if not sticker:
+            success, result = await self.create_pack(data, set_name, set_title, emoji)
+        else:
+            success, result = await self.add_sticker(data, set_name, emoji)
 
         await media.unlink(missing_ok=True)
 
