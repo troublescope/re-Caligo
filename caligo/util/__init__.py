@@ -9,6 +9,7 @@ __all__ = [  # skipcq: PY-W2000
     "time",
     "version",
     "run_sync",
+    "resize_media",
 ]
 
 from . import async_helpers, error, git, misc, system, text, tg, time, version
