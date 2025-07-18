@@ -3,7 +3,7 @@ import bisect
 from typing import TYPE_CHECKING, Any, MutableMapping, MutableSequence, Optional
 
 from pyrogram.filters import Filter
-from pyrogram.types import CallbackQuery, InlineQuery, Message
+from pyrogram.types import CallbackQuery, ChosenInlineResult, InlineQuery, Message
 
 from caligo import module, util
 from caligo.listener import Listener, ListenerFunc
@@ -108,7 +108,9 @@ class EventDispatcher(CaligoBase):
         for lst in listeners:
             if lst.filters is not None:
                 for arg in args:
-                    if isinstance(arg, (CallbackQuery, InlineQuery, Message)):
+                    if isinstance(
+                        arg, (CallbackQuery, ChosenInlineResult, InlineQuery, Message)
+                    ):
                         match = await lst.filters(self.client, arg)
                         if not match:
                             continue

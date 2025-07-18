@@ -13,6 +13,7 @@ from pyrogram.errors import (
     SessionRevoked,
 )
 from pyrogram.handlers.callback_query_handler import CallbackQueryHandler
+from pyrogram.handlers.chosen_inline_result_handler import ChosenInlineResultHandler
 from pyrogram.handlers.deleted_messages_handler import DeletedMessagesHandler
 from pyrogram.handlers.inline_query_handler import InlineQueryHandler
 from pyrogram.handlers.message_handler import MessageHandler
@@ -27,7 +28,11 @@ if TYPE_CHECKING:
     from .bot import Caligo
 
 Handler = Union[
-    CallbackQueryHandler, DeletedMessagesHandler, InlineQueryHandler, MessageHandler
+    CallbackQueryHandler,
+    DeletedMessagesHandler,
+    InlineQueryHandler,
+    MessageHandler,
+    ChosenInlineResultHandler,
 ]
 Update = Union[CallbackQuery, InlineQuery, List[Message], Message]
 
@@ -272,6 +277,7 @@ class TelegramBot(CaligoBase):
         if self.helper_initialized:
             self.update_helper_event("callback_query", CallbackQueryHandler)
             self.update_helper_event("inline_query", InlineQueryHandler)
+            self.update_helper_event("chosen_inline_result", ChosenInlineResultHandler)
 
     @property
     def events_activated(self: "Caligo") -> int:
