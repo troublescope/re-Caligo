@@ -17,7 +17,7 @@ from pyrogram.handlers.chosen_inline_result_handler import ChosenInlineResultHan
 from pyrogram.handlers.deleted_messages_handler import DeletedMessagesHandler
 from pyrogram.handlers.inline_query_handler import InlineQueryHandler
 from pyrogram.handlers.message_handler import MessageHandler
-from pyrogram.types import CallbackQuery, InlineQuery, Message, User
+from pyrogram.types import CallbackQuery, InlineQuery, Message, ReplyParameters, User
 
 from caligo.util import tg, time
 
@@ -359,7 +359,9 @@ class TelegramBot(CaligoBase):
                 del kwargs["disable_web_page_preview"]
                 response = await msg.reply_document(**kwargs)
             else:
-                response = await msg.reply(text, reply_to_message_id=msg.id, **kwargs)
+                response = await msg.reply(
+                    text, reply_parameters=ReplyParameters(message_id=msg.id), **kwargs
+                )
             await msg.delete()
             return response
 
