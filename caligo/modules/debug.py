@@ -279,6 +279,7 @@ class Debug(module.Module):
             "util": util,
         }
 
+        start_time = util.time.usec()
         try:
             with redirect_stdout(out_buf):
                 result, elapsed, exception = await reval(code, globals(), **eval_vars)
@@ -290,8 +291,11 @@ class Debug(module.Module):
                     prefix = ""
 
         except Exception as e:  # skipcq: PYL-W0703
-            # This should only catch exceptions from reval itself, not from the executed code
-            raise e
+            # Handle syntax errors and other exceptions from reval itself
+            end_time = util.time.usec()
+            elapsed = end_time - start_time
+            prefix = "⚠️ Error executing snippet\n\n"
+            result = e
 
         # Always write result if no output has been collected thus far
         if not out_buf.getvalue() or result is not None:
@@ -304,6 +308,10 @@ class Debug(module.Module):
         if out.endswith("\n"):
             out = out[:-1]
 
+        # Replace empty output with "[No Output]"
+        if not out.strip():
+            out = "[No Output]"
+
         respond_text = f"""{prefix}Input:
 <code>{escape(code)}</code>\n
 Output:
@@ -313,7 +321,7 @@ Output:
         if len(respond_text) > 2048:
             data = ""
             if len(code) > 1024:
-                code = code[:1024] + "..."
+                code = code[:512] + "..."
                 data += f"Input:\n{code}"
 
             if len(out) > 1024:
