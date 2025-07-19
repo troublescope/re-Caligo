@@ -144,7 +144,7 @@ class Context:
         self.response = None  # type: ignore
         self.response_mode = None
 
-        self.input = self.msg.text[self.cmd_len :]
+        self.input = self.msg.content[self.cmd_len :]
 
         # Parse flags from command if not provided
         if flags is None:

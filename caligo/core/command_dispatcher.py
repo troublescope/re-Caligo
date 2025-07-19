@@ -109,8 +109,8 @@ class CommandDispatcher(CaligoBase):
             if message.via_bot:
                 return False
 
-            if message.text is not None and message.text.startswith(self.prefix):
-                parts = message.text.split()
+            if message.content is not None and message.content.startswith(self.prefix):
+                parts = message.content.split()
                 parts[0] = parts[0][len(self.prefix) :]  # Remove prefix
 
                 # Filter if command is not in commands
@@ -157,7 +157,7 @@ class CommandDispatcher(CaligoBase):
                 cmd.module.log.error(f"Error in command '{cmd.name}'", exc_info=e)
                 await ctx.respond(
                     "**In**:\n"
-                    f"{ctx.input if ctx.input is not None else message.text}\n\n"
+                    f"{ctx.input if ctx.input is not None else message.content}\n\n"
                     "**Out**:\n⚠️ Error executing command:\n"
                     f"```{util.error.format_exception(e)}```"
                 )
