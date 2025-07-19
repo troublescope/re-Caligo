@@ -700,27 +700,6 @@ files = [
 colors = ["colorama (>=0.4.6)"]
 
 [[package]]
-name = "kurigram"
-version = "2.2.7"
-description = "Elegant, modern and asynchronous Telegram MTProto API framework in Python for users and bots"
-optional = false
-python-versions = ">=3.8"
-groups = ["main"]
-files = [
-    {file = "kurigram-2.2.7-py3-none-any.whl", hash = "sha256:3ebcfd4f4e7e6e9a2547997b8915ed323f679d9e99fde70a1f30f4c72aee0a97"},
-    {file = "kurigram-2.2.7.tar.gz", hash = "sha256:61f3529a0cdc0a0f10f8b98103c6509317d90ebc0ae69959f38a4b684ad244f8"},
-]
-
-[package.dependencies]
-pyaes = "<=1.6.1"
-pysocks = "<=1.7.1"
-
-[package.extras]
-dev = ["hatch (<=1.7.0)", "keyring (<=25.1.0)", "pytest (<=7.4.3)", "pytest-asyncio (<=0.21.1)", "pytest-cov (<=4.1.0)", "twine (<=4.0.2)"]
-docs = ["furo (<=2024.8.8)", "pygments (<=2.19.1)", "sphinx (<=8.2.3)", "sphinx-autobuild (<=2024.10.3)", "sphinx-copybutton (<=0.5.2)"]
-fast = ["tgcrypto (<=1.2.5)", "uvloop (<=0.21.0) ; sys_platform == \"darwin\" or sys_platform == \"linux\""]
-
-[[package]]
 name = "lazy-object-proxy"
 version = "1.11.0"
 description = "A fast and thorough lazy object proxy."
@@ -1350,6 +1329,27 @@ test = ["pytest (>=8.2)", "pytest-asyncio (>=0.24.0)"]
 zstd = ["zstandard"]
 
 [[package]]
+name = "pyrotgfork"
+version = "2.2.13"
+description = "Fork of Pyrogram. Elegant, modern and asynchronous Telegram MTProto API framework in Python for users and bots"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "pyrotgfork-2.2.13-py3-none-any.whl", hash = "sha256:6ea7d1ff89c471486890de3481eb9f1bd5637378f9652a527f33cae6863ed6e0"},
+    {file = "pyrotgfork-2.2.13.tar.gz", hash = "sha256:a5b9d0c91c797517f0531c6c66856c301f6dc477fdbf5aba76195007e180ab78"},
+]
+
+[package.dependencies]
+pyaes = "<=1.6.1"
+pysocks = "<=1.7.1"
+
+[package.extras]
+dev = ["hatch (<=1.7.0)", "keyring (<=25.1.0)", "pytest (<=7.4.3)", "pytest-asyncio (<=0.21.1)", "pytest-cov (<=4.1.0)", "twine (<=4.0.2)"]
+docs = ["furo (<=2023.9.10)", "pygments (<=2.17.2)", "sphinx (<=7.2.6)", "sphinx-autobuild (<=2021.3.14)", "sphinx-copybutton (<=0.5.2)"]
+fast = ["pytgcrypto (>1.2.9.2,<=1.4)", "uvloop (>0.18.0,<=0.19.0)"]
+
+[[package]]
 name = "pysocks"
 version = "1.7.1"
 description = "A Python SOCKS client module. See https://github.com/Anorov/PySocks for more information."
@@ -1876,4 +1876,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "96bef2fa00b38ba27a44571b6bdf6b4699fa90949462ae524d8570b986325062"
+content-hash = "de777442565591113266a423e7fea6b17add35615f75436650e46395926e9ba0"
