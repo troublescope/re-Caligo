@@ -1,6 +1,6 @@
 import io
 import uuid
-from typing import Any
+from typing import Any, Optional, Union
 
 import bprint
 import pyrogram
@@ -37,6 +37,60 @@ def mention_user(user: pyrogram.types.User) -> str:
             name = "Deleted Account"
 
     return f"[{name}](tg://user?id={user.id})"
+
+
+async def extract_user_id(
+    message: pyrogram.types.Message, user_input: Union[str, int]
+) -> Optional[int]:
+    """
+    Extracts user ID from username, user ID, or User object using resolve_peer.
+    Only returns user IDs, not channel or chat IDs.
+
+    Args:
+        message: Pyrogram Message Object
+        user_input: Username (with or without @ prefix), user ID as int/str, or User object
+
+    Returns:
+        User ID as integer if user_input belongs to a user, None otherwise
+    """
+    try:
+        # If it's already an integer, return it directly
+        if isinstance(user_input, int):
+            return user_input
+
+        # If it's a User object, return its ID
+        if hasattr(user_input, "id") and isinstance(user_input.id, int):
+            return user_input.id
+
+        # Convert to string and try to parse as integer first
+        user_str = str(user_input).strip()
+
+        # Try parsing as integer (user ID)
+        try:
+            return int(user_str)
+        except ValueError:
+            pass
+
+        # If not a number, treat as username and resolve
+        username = user_str.lstrip("@")
+        if not username:
+            return None
+
+        peer = await message._client.resolve_peer(username)
+
+        if isinstance(peer, pyrogram.raw.types.InputPeerUser):
+            return peer.user_id
+        else:
+            return None  # Not a user (could be channel/group)
+
+    except (
+        pyrogram.errors.UsernameNotOccupied,
+        pyrogram.errors.UsernameInvalid,
+        pyrogram.errors.PeerIdInvalid,
+    ):
+        return None
+    except Exception:
+        return None
 
 
 def filter_code_block(inp: str) -> str:
