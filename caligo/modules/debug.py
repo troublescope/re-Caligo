@@ -263,9 +263,9 @@ class Debug(module.Module):
             "inspect": inspect,
             "os": os,
             "re": re,
+            "reval": reval,
             "sys": sys,
             "traceback": traceback,
-            # Third-party modules
             # Pyrogram
             "pyrogram": pyrogram,
             "enums": pyrogram.enums,
