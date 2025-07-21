@@ -1,4 +1,3 @@
-# Optimized for Python 3.12
 from __future__ import annotations
 
 import asyncio
@@ -6,7 +5,7 @@ import base64
 import inspect
 import struct
 import time
-from typing import Any, TypeAlias, Union
+from typing import Any, NamedTuple, TypeAlias, Union
 
 from pymongo import UpdateOne
 from pyrogram.raw.types.input_peer_channel import InputPeerChannel
@@ -15,6 +14,8 @@ from pyrogram.raw.types.input_peer_user import InputPeerUser
 from pyrogram.storage.sqlite_storage import get_input_peer
 from pyrogram.storage.storage import Storage
 
+from caligo import util
+
 from . import AsyncDatabase
 
 # Type aliases
@@ -22,6 +23,15 @@ PeerTuple: TypeAlias = tuple[int, int, str, str]
 UsernameTuple: TypeAlias = tuple[int, list[str]]
 UpdateStateTuple: TypeAlias = tuple[int, int, int, int, int]
 InputPeer: TypeAlias = Union[InputPeerUser, InputPeerChat, InputPeerChannel]
+
+
+class PeerInfo(NamedTuple):
+    peer_id: int
+    access_hash: int
+    peer_type: str
+    usernames: list[str]
+    phone_number: str
+
 
 # Sentinel object parameter default.
 _SENTINEL = object()
@@ -92,32 +102,60 @@ class PersistentStorage(Storage):
         except Exception:
             return
 
-    def _validate_peer_tuple(self, peer_data: tuple) -> PeerTuple | None:
+    def _validate_peer_tuple(self, peer_data: tuple) -> PeerInfo | None:
         """
-        Validate and normalize peer tuple data using pattern matching.
+        Validate and normalize peer tuple data to match abstract class signature.
 
         Parameters:
             peer_data: Raw peer tuple data
 
         Returns:
-            Normalized peer tuple or None if invalid
+            Normalized PeerInfo or None if invalid
         """
         try:
             match len(peer_data):
                 case 3:
                     # Handle case with 3 values: (id, access_hash, type)
                     peer_id, access_hash, peer_type = peer_data
-                    return (peer_id, access_hash, peer_type, "")
+                    return PeerInfo(peer_id, access_hash, peer_type, [], "")
 
                 case 4:
-                    # Handle case with 4 values: (id, access_hash, type, phone_number)
-                    peer_id, access_hash, peer_type, phone_number = peer_data
-                    return (peer_id, access_hash, peer_type, phone_number or "")
+                    # Handle case with 4 values - could be (id, access_hash, type, usernames) or (id, access_hash, type, phone)
+                    peer_id, access_hash, peer_type, fourth_element = peer_data
+                    if isinstance(fourth_element, list):
+                        return PeerInfo(
+                            peer_id, access_hash, peer_type, fourth_element, ""
+                        )
+                    else:
+                        return PeerInfo(
+                            peer_id, access_hash, peer_type, [], fourth_element or ""
+                        )
 
-                case n if n > 4:
-                    # Handle case with more than 4 values, take first 4
-                    peer_id, access_hash, peer_type, phone_number = peer_data[:4]
-                    return (peer_id, access_hash, peer_type, phone_number or "")
+                case 5:
+                    # Handle case with 5 values: (id, access_hash, type, usernames, phone_number)
+                    peer_id, access_hash, peer_type, usernames, phone_number = peer_data
+                    usernames_list = usernames if isinstance(usernames, list) else []
+                    return PeerInfo(
+                        peer_id,
+                        access_hash,
+                        peer_type,
+                        usernames_list,
+                        phone_number or "",
+                    )
+
+                case n if n > 5:
+                    # Handle case with more than 5 values, take first 5
+                    peer_id, access_hash, peer_type, usernames, phone_number = (
+                        peer_data[:5]
+                    )
+                    usernames_list = usernames if isinstance(usernames, list) else []
+                    return PeerInfo(
+                        peer_id,
+                        access_hash,
+                        peer_type,
+                        usernames_list,
+                        phone_number or "",
+                    )
 
                 case _:
                     # Invalid tuple length (< 3)
@@ -132,41 +170,81 @@ class PersistentStorage(Storage):
 
         Parameters:
             peers: A list of tuples containing the information of the peers to be updated.
-                Each tuple should contain: (id, access_hash, type) or (id, access_hash, type, phone_number)
+                Each tuple should contain: (id, access_hash, type, usernames_list, phone_number)
+                or variations with fewer elements.
         """
         if not peers:
             return
 
         current_time = int(time.time())
-        bulk_ops = []
+        peer_bulk_ops = []
+        username_bulk_ops = []
+        peers_to_clear_usernames = set()
 
         for peer_data in peers:
-            match self._validate_peer_tuple(peer_data):
-                case (peer_id, access_hash, peer_type, phone_number):
-                    bulk_ops.append(
-                        UpdateOne(
-                            {"_id": peer_id},
-                            {
-                                "$set": {
-                                    "access_hash": access_hash,
-                                    "type": peer_type,
-                                    "phone_number": phone_number,
-                                    "last_update_on": current_time,
-                                }
-                            },
-                            upsert=True,
-                        )
-                    )
-                case None:
-                    # Skip invalid peer data
-                    continue
+            peer_info = await util.run_sync(self._validate_peer_tuple, peer_data)
+            if peer_info is None:
+                continue
 
-        if bulk_ops:
-            await self._peer.bulk_write(bulk_ops)
+            # Update peer information
+            peer_bulk_ops.append(
+                UpdateOne(
+                    {"_id": peer_info.peer_id},
+                    {
+                        "$set": {
+                            "access_hash": peer_info.access_hash,
+                            "type": peer_info.peer_type,
+                            "phone_number": peer_info.phone_number,
+                            "last_update_on": current_time,
+                        }
+                    },
+                    upsert=True,
+                )
+            )
+
+            # Handle usernames if provided
+            if peer_info.usernames:
+                peers_to_clear_usernames.add(peer_info.peer_id)
+
+                # Add new usernames
+                for username in peer_info.usernames:
+                    if username and username.strip():  # Skip empty/whitespace usernames
+                        username_bulk_ops.append(
+                            UpdateOne(
+                                {
+                                    "peer_id": peer_info.peer_id,
+                                    "username": username.strip(),
+                                },
+                                {
+                                    "$set": {
+                                        "peer_id": peer_info.peer_id,
+                                        "username": username.strip(),
+                                        "last_update_on": current_time,
+                                    }
+                                },
+                                upsert=True,
+                            )
+                        )
+
+        # Execute bulk operations
+        if peer_bulk_ops:
+            await self._peer.bulk_write(peer_bulk_ops)
+
+        # Clear old usernames for peers that have new username data
+        if peers_to_clear_usernames:
+            await self._usernames.delete_many(
+                {"peer_id": {"$in": list(peers_to_clear_usernames)}}
+            )
+
+        if username_bulk_ops:
+            await self._usernames.bulk_write(username_bulk_ops)
 
     async def update_usernames(self, usernames: list[UsernameTuple]) -> None:
         """
         Update the usernames table with the provided information.
+
+        Note: This method is kept for backward compatibility but update_peers
+        should handle usernames directly.
 
         Parameters:
             usernames: A list of tuples containing the information of the usernames to be updated.
@@ -177,25 +255,32 @@ class PersistentStorage(Storage):
 
         current_time = int(time.time())
         bulk_ops = []
+        peers_to_clear = set()
 
         for peer_id, username_list in usernames:
-            # Remove existing usernames for this peer
-            await self._usernames.delete_many({"peer_id": peer_id})
+            peers_to_clear.add(peer_id)
 
-            # Batch insert new usernames
-            bulk_ops.extend(
-                UpdateOne(
-                    {"peer_id": peer_id, "username": username},
-                    {
-                        "$set": {
-                            "peer_id": peer_id,
-                            "username": username,
-                            "last_update_on": current_time,
-                        }
-                    },
-                    upsert=True,
-                )
-                for username in username_list
+            # Add new usernames
+            for username in username_list:
+                if username and username.strip():  # Skip empty/whitespace usernames
+                    bulk_ops.append(
+                        UpdateOne(
+                            {"peer_id": peer_id, "username": username.strip()},
+                            {
+                                "$set": {
+                                    "peer_id": peer_id,
+                                    "username": username.strip(),
+                                    "last_update_on": current_time,
+                                }
+                            },
+                            upsert=True,
+                        )
+                    )
+
+        # Clear old usernames for these peers
+        if peers_to_clear:
+            await self._usernames.delete_many(
+                {"peer_id": {"$in": list(peers_to_clear)}}
             )
 
         if bulk_ops:
@@ -243,7 +328,7 @@ class PersistentStorage(Storage):
             case None:
                 raise KeyError(f"ID not found: {peer_id}")
             case res:
-                return get_input_peer(*res.values())
+                return get_input_peer(res["_id"], res["access_hash"], res["type"])
 
     async def get_peer_by_username(self, username: str) -> InputPeer:
         """
@@ -252,18 +337,23 @@ class PersistentStorage(Storage):
         Parameters:
             username: The username of the peer to retrieve.
         """
+        # Normalize username (remove @ if present, strip whitespace)
+        normalized_username = username.lstrip("@").strip()
+
         # Find username in usernames collection
         match await self._usernames.find_one(
-            {"username": username}, {"peer_id": 1, "last_update_on": 1}
+            {"username": normalized_username}, {"peer_id": 1, "last_update_on": 1}
         ):
             case None:
                 raise KeyError(f"Username not found: {username}")
             case username_res:
                 # Check TTL
-                if (
-                    abs(time.time() - username_res["last_update_on"])
-                    > self.USERNAME_TTL
-                ):
+                current_time = time.time()
+                age = abs(current_time - username_res["last_update_on"])
+
+                if age > self.USERNAME_TTL:
+                    # Clean up expired username
+                    await self._usernames.delete_one({"username": normalized_username})
                     raise KeyError(f"Username expired: {username}")
 
                 # Get peer info from peers collection
@@ -272,6 +362,8 @@ class PersistentStorage(Storage):
                     {"_id": peer_id}, {"_id": 1, "access_hash": 1, "type": 1}
                 ):
                     case None:
+                        # Peer was deleted but username still exists - clean up
+                        await self._usernames.delete_many({"peer_id": peer_id})
                         raise KeyError(f"Peer not found for username: {username}")
                     case res:
                         return get_input_peer(
@@ -285,13 +377,21 @@ class PersistentStorage(Storage):
         Parameters:
             phone_number: The phone number of the peer to retrieve.
         """
+        # Normalize phone number (remove spaces, hyphens, etc.)
+        normalized_phone = (
+            phone_number.replace(" ", "")
+            .replace("-", "")
+            .replace("(", "")
+            .replace(")", "")
+        )
+
         match await self._peer.find_one(
-            {"phone_number": phone_number}, {"_id": 1, "access_hash": 1, "type": 1}
+            {"phone_number": normalized_phone}, {"_id": 1, "access_hash": 1, "type": 1}
         ):
             case None:
                 raise KeyError(f"Phone number not found: {phone_number}")
             case res:
-                return get_input_peer(*res.values())
+                return get_input_peer(res["_id"], res["access_hash"], res["type"])
 
     async def _get(self) -> Any | None:
         """Internal method to get session attributes."""
