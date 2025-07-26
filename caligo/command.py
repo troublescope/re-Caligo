@@ -8,11 +8,14 @@ from typing import (
     Iterable,
     Optional,
     Sequence,
+    Type,
+    TypeVar,
     Union,
 )
 
 from pyrogram.filters import Filter
-from pyrogram.types import Chat, Message
+from pyrogram.handlers import CallbackQueryHandler, MessageHandler
+from pyrogram.types import Chat, Message, Update
 
 from caligo import util
 
@@ -23,6 +26,8 @@ CommandFunc = Union[
     Callable[..., Coroutine[Any, Any, None]], Callable[..., Coroutine[Any, Any, Any]]
 ]
 Decorator = Callable[[CommandFunc], CommandFunc]
+
+T = TypeVar("T", bound=Update)
 
 
 def desc(_desc: str) -> Decorator:
@@ -228,6 +233,83 @@ class Context:
 
         self.args = args
         return self.args
+
+    async def listen(
+        self, handler_type: Type, filters: Filter, timeout: int = 10, group: int = -999
+    ) -> T | None:
+        """
+        Listen for a specific type of update with given filters.
+
+        Args:
+            handler_type: The handler type (MessageHandler, CallbackQueryHandler, etc.)
+            filters: Pyrogram filters to match against
+            timeout: Maximum time to wait for the update (in seconds)
+            group: Handler group number
+
+        Returns:
+            The matching update or None if timeout occurred
+        """
+        future = asyncio.get_running_loop().create_future()
+
+        async def _callback(_, update: T):
+            if not future.done():
+                future.set_result(update)
+
+        handler = handler_type(_callback, filters)
+        # Assuming the bot has a client attribute that's the Pyrogram Client
+        client = getattr(self.bot, "client", self.bot)
+        client.add_handler(handler, group)
+
+        try:
+            return await asyncio.wait_for(future, timeout)
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            client.remove_handler(handler, group)
+
+    async def listen_message(
+        self, filters: Optional[Filter] = None, timeout: int = 10, group: int = -999
+    ) -> Optional[Message]:
+        """
+        Convenience method to listen for message updates.
+
+        Args:
+            filters: Pyrogram filters to match against (defaults to text & incoming)
+            timeout: Maximum time to wait for the message (in seconds)
+            group: Handler group number
+
+        Returns:
+            The matching message or None if timeout occurred
+        """
+        from pyrogram import filters as f
+
+        if filters is None:
+            filters = f.text & f.incoming
+
+        return await self.listen(
+            handler_type=MessageHandler, filters=filters, timeout=timeout, group=group
+        )
+
+    async def listen_callback(
+        self, filters: Optional[Filter] = None, timeout: int = 10, group: int = -999
+    ) -> Optional[Any]:  # CallbackQuery type
+        """
+        Convenience method to listen for callback query updates.
+
+        Args:
+            filters: Pyrogram filters to match against
+            timeout: Maximum time to wait for the callback (in seconds)
+            group: Handler group number
+
+        Returns:
+            The matching callback query or None if timeout occurred
+        """
+        return await self.listen(
+            handler_type=CallbackQueryHandler,
+            filters=filters or Filter(),
+            timeout=timeout,
+            group=group,
+        )
 
     async def _delete(
         self, delay: Optional[float] = None, message: Optional[Message] = None

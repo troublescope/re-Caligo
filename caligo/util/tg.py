@@ -1,12 +1,22 @@
 import io
+import re
 import uuid
-from typing import Any, Optional, Union
+from enum import IntEnum, unique
+from typing import Any, List, Optional, Tuple, Union
 
 import bprint
 import pyrogram
+from pyrogram.types import (
+    CopyTextButton,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 MESSAGE_CHAR_LIMIT = 4096
 TRUNCATION_SUFFIX = "... (truncated)"
+Button = Union[Tuple[Tuple[str, str, bool]], List[Tuple[str, str, bool]]]
+
 
 SKIP_ATTR_NAMES = (
     "CONSTRUCTOR_ID",
@@ -18,6 +28,22 @@ SKIP_ATTR_NAMES = (
 )
 SKIP_ATTR_VALUES = (False,)
 SKIP_ATTR_TYPES = ()
+
+
+@unique
+class Types(IntEnum):
+    """A Class representing message type"""
+
+    TEXT = 0
+    BUTTON_TEXT = 1
+    DOCUMENT = 2
+    PHOTO = 3
+    VIDEO = 4
+    STICKER = 5
+    AUDIO = 6
+    VOICE = 7
+    VIDEO_NOTE = 8
+    ANIMATION = 9
 
 
 def mention_user(user: pyrogram.types.User) -> str:
@@ -142,3 +168,131 @@ async def send_as_document(
             document=o,
             caption="❯ ```" + caption + "```",
         )
+
+
+def get_message_info(msg: Message) -> Tuple[str, Types, Optional[str], Button]:
+    """Parse received message and return its content."""
+    types = None
+    content = None
+    text = ""
+    buttons = []
+
+    reply_msg = msg.reply_to_message
+
+    if reply_msg:
+        text = reply_msg.text or reply_msg.caption
+        added_text = None
+        if text:
+            text, buttons = parse_button(text.markdown)
+        else:
+            # added_text are from user input
+            added_text, buttons = parse_button(msg.text.markdown.split(" ", 2)[-1])
+
+        if not text and added_text is not None:
+            text = added_text
+
+        if reply_msg.text:
+            types = Types.BUTTON_TEXT if buttons else Types.TEXT
+        elif reply_msg.sticker:
+            content, types = reply_msg.sticker.file_id, Types.STICKER
+        elif reply_msg.document:
+            content, types = reply_msg.document.file_id, Types.DOCUMENT
+        elif reply_msg.photo:
+            content, types = reply_msg.photo.file_id, Types.PHOTO
+        elif reply_msg.audio:
+            content, types = reply_msg.audio.file_id, Types.AUDIO
+        elif reply_msg.voice:
+            content, types = reply_msg.voice.file_id, Types.VOICE
+        elif reply_msg.video:
+            content, types = reply_msg.video.file_id, Types.VIDEO
+        elif reply_msg.video_note:
+            content, types = reply_msg.video_note.file_id, Types.VIDEO_NOTE
+        elif reply_msg.animation:
+            content, types = reply_msg.animation.file_id, Types.ANIMATION
+        else:
+            raise ValueError("Can't get message information")
+    else:
+        raw_text = msg.text.markdown.split(" ", 2)
+        if len(raw_text) == 2:  # content were on the next line
+            raw_text = raw_text[1]
+            text, buttons = parse_button(raw_text.split("\n", 1)[1])
+        else:
+            text, buttons = parse_button(raw_text[2])
+        types = Types.BUTTON_TEXT if buttons else Types.TEXT
+
+    return text, types, content, buttons
+
+
+def parse_button(text: str) -> Tuple[str, Button]:
+    """Parse button to save"""
+    regex = re.compile(r"(\[([^\[]+?)\]\(button(url|copy):(?:/{0,2})(.+?)(:same)?\))")
+
+    prev = 0
+    parser_data = ""
+    buttons = []  # type: List[Tuple[str, str, bool]]
+    for match in regex.finditer(text):
+        # escape check
+        md_escaped = 0
+        to_check = match.start(1) - 1
+        while to_check > 0 and text[to_check] == "\\":
+            md_escaped += 1
+            to_check -= 1
+
+        # if != "escaped" -> Create button: btn
+        if md_escaped % 2 == 0:
+            label = match.group(2)
+            _type = match.group(3)
+            _text = match.group(4)
+            _same = bool(match.group(5))
+
+            # create a thruple with button label, url, and newline status
+            buttons.append((label, _type, _text, _same))
+            parser_data += text[prev : match.start(1)]
+            prev = match.end(1)
+        # if odd, escaped -> move along
+        else:
+            parser_data += text[prev:to_check]
+            prev = match.start(1) - 1
+
+    parser_data += text[prev:]
+    # Remove any markdown button left over if any
+    # t = parser_data.rstrip().split()
+    # if t:
+    #     pattern = re.compile(r"[_-`*~]+")
+    #     anyMarkdownLeft = pattern.search(t[-1])
+    #     if anyMarkdownLeft:
+    #         toRemove = anyMarkdownLeft[0][0]
+    #         t[-1] = t[-1].replace(toRemove, "")
+    #         return " ".join(t), buttons
+
+    return parser_data.rstrip(), buttons
+
+
+def build_button(buttons: Button) -> InlineKeyboardMarkup:
+    """Build saved button format"""
+    keyb = []  # type: List[List[InlineKeyboardButton]]
+    for data in buttons:
+        ikb = None
+        label, _type, _text, _same = data
+        if _type == "url":
+            ikb = InlineKeyboardButton(label, url=_text)
+        else:
+            ikb = InlineKeyboardButton(label, copy_text=CopyTextButton(text=_text))
+        if ikb:
+            if _same and keyb:
+                keyb[-1].append(ikb)
+            else:
+                keyb.append([ikb])
+
+    return InlineKeyboardMarkup(keyb)
+
+
+def revert_button(button: Button) -> str:
+    """Revert button format"""
+    res = ""
+    for btn in button:
+        if btn[2]:
+            res += f"\n[{btn[0]}](buttonurl://{btn[1]}:same)"
+        else:
+            res += f"\n[{btn[0]}](buttonurl://{btn[1]})"
+    return res

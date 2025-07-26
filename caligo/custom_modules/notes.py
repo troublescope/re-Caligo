@@ -1,0 +1,272 @@
+import asyncio
+import uuid
+from typing import Any, Callable, ClassVar, Coroutine, MutableMapping, Optional
+
+from pyrogram import filters, types
+from pyrogram.enums.parse_mode import ParseMode
+from pyrogram.errors import MediaEmpty, MessageEmpty
+from pyrogram.types import (
+    InlineKeyboardButton,
+    InlineQuery,
+    InlineQueryResult,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    Message,
+)
+
+from caligo import command, listener, module, util
+from caligo.core import database
+from caligo.util.tg import Types, build_button, get_message_info, revert_button
+
+
+class Notes(module.Module):
+    name: ClassVar[str] = "Notes"
+    helpable: ClassVar[bool] = True
+
+    db: database.AsyncCollection
+    SEND: MutableMapping[int, Callable[..., Coroutine[Any, Any, Optional[Message]]]]
+    state: dict[str, list]
+    log_chat: int
+
+    async def on_load(self):
+        self.log_chat = self.bot.config["bot"]["log_chat"]
+        self.db = self.bot.db.get_collection("NOTES")
+        self.state = {}
+        self.SEND = {
+            Types.TEXT.value: self.bot.client.send_message,
+            Types.BUTTON_TEXT.value: self.bot.client.send_message,
+            Types.DOCUMENT.value: self.bot.client.send_document,
+            Types.PHOTO.value: self.bot.client.send_photo,
+            Types.VIDEO.value: self.bot.client.send_video,
+            Types.STICKER.value: self.bot.client.send_sticker,
+            Types.AUDIO.value: self.bot.client.send_audio,
+            Types.VOICE.value: self.bot.client.send_voice,
+            Types.VIDEO_NOTE.value: self.bot.client.send_video_note,
+            Types.ANIMATION.value: self.bot.client.send_animation,
+        }
+
+    async def _generate_inline_result(
+        self, msg: Message, btn: list[InlineKeyboardButton]
+    ) -> InlineQueryResult:
+        """msg._client must be bot"""
+        parameters: dict[str, any] = {"reply_markup": btn}
+
+        if not msg.media:
+            raise TypeError("Must be a Message Media Object")
+
+        media_str = msg.media.value
+        media_obj = getattr(msg, media_str, None)
+
+        parameters.update(
+            {f"{media_str}_file_id": media_obj.file_id, "caption": msg.content.markdown}
+        )
+
+        if media_str not in {"audio", "sticker"}:
+            parameters["title"] = "Dynamic InlineResultCachedMedia"
+
+        return getattr(types, f"InlineQueryResultCached{media_str.title()}", None)(
+            **parameters
+        )
+
+    @listener.filters(filters.regex(r"^note_\w+$"))
+    async def on_inline_query(self, event: InlineQuery) -> None:
+        results = self.state.get(event.query)
+        if not results:
+            await event.stop_propagation()
+            return
+        await event.answer(results=results, cache_time=0)
+        await asyncio.to_thread(self.state.pop, event.query, None)
+
+    @listener.priority(95)
+    @listener.filters(filters.regex(r"^#[\w\-]+(?!\n)$") & filters.me)
+    async def on_message(self, message: Message) -> None:
+        trigger = message.text or message.caption
+        await self.get_note(message, trigger.lstrip("#"))
+
+    async def get_note(
+        self, message: Message, name: str, noformat: bool = False
+    ) -> None:
+        chat = message.chat
+        reply_to = (
+            message.reply_to_message.id if message.reply_to_message else message.id
+        )
+
+        data = await self.db.find_one(
+            {"_id": 0, f"notes.{name}": {"$exists": True}}, {f"notes.{name}": 1}
+        )
+        if not data:
+            return
+        await message.delete(revoke=True)
+
+        note = data["notes"][name]
+        button = note.get("button")
+        types = note["type"]
+        text = note["text"] or name
+
+        if noformat:
+            parse_mode = ParseMode.DISABLED
+            btn_text = "\n\n" + revert_button(button) if button else ""
+            keyb = None
+            try:
+                if types in {Types.TEXT, Types.BUTTON_TEXT}:
+                    await self.SEND[types](
+                        chat.id,
+                        text + btn_text,
+                        disable_web_page_preview=True,
+                        reply_to_message_id=reply_to,
+                        reply_markup=keyb,
+                        parse_mode=parse_mode,
+                    )
+                elif types == Types.STICKER:
+                    await self.SEND[types](
+                        chat.id,
+                        note["content"],
+                        reply_to_message_id=reply_to,
+                        reply_markup=keyb,
+                    )
+                else:
+                    await self.SEND[types](
+                        chat.id,
+                        str(note["content"]),
+                        caption=text + btn_text,
+                        reply_to_message_id=reply_to,
+                        reply_markup=keyb,
+                        parse_mode=parse_mode,
+                    )
+            except MediaEmpty:
+                await self.bot.client.send_message(
+                    chat.id,
+                    "Your note has expired...",
+                    message_thread_id=message.message_thread_id,
+                )
+            except MessageEmpty:
+                pass
+            return
+
+        if types == Types.BUTTON_TEXT.value and button:
+            key = f"note_{uuid.uuid4().hex}"
+            self.state[key] = [
+                InlineQueryResultArticle(
+                    title=f"Note: {name}",
+                    description=text,
+                    input_message_content=InputTextMessageContent(
+                        message_text=text,
+                        parse_mode=ParseMode.MARKDOWN,
+                    ),
+                    reply_markup=await util.run_sync(build_button, button),
+                    id=key,
+                )
+            ]
+            results = await self.bot.client.get_inline_bot_results(
+                self.bot.client_helper.me.username, key
+            )
+
+            await self.bot.client.send_inline_bot_result(
+                chat_id=chat.id,
+                query_id=results.query_id,
+                result_id=results.results[0].id,
+                reply_to_message_id=reply_to,
+            )
+            return
+
+        _tmp_msg = await self.bot.client.send_cached_media(
+            self.log_chat, note["content"], caption=text
+        )
+        _msgbot, btn_markup = await asyncio.gather(
+            self.bot.client_helper.get_messages(self.log_chat, _tmp_msg.id),
+            util.run_sync(build_button, button),
+        )
+        inline = await self._generate_inline_result(_msgbot, btn_markup)
+        key = f"note_{uuid.uuid4().hex}"
+        self.state[key] = [inline]
+        results = await self.bot.client.get_inline_bot_results(
+            self.bot.client_helper.me.username, key
+        )
+
+        await self.bot.client.send_inline_bot_result(
+            chat_id=chat.id,
+            query_id=results.query_id,
+            result_id=results.results[0].id,
+            reply_to_message_id=reply_to,
+        )
+        await _tmp_msg.delete()
+
+    @command.desc("Show a saved note")
+    async def cmd_get(self, ctx: command.Context) -> None:
+        if not ctx.input:
+            return
+        if len(ctx.args) >= 2 and ctx.args[1].lower() == "noformat":
+            await self.get_note(ctx.msg, ctx.args[0], noformat=True)
+        else:
+            await self.get_note(ctx.msg, ctx.args[0])
+
+    @command.desc("Save a note")
+    @command.alias("addnote")
+    @command.usage("save [reply to message or input]")
+    async def cmd_save(self, ctx: command.Context) -> None:
+        if (
+            len(ctx.args) < 2
+            and not ctx.msg.reply_to_message
+            or ctx.msg.reply_to_message
+            and len(ctx.args) < 1
+        ):
+            await ctx.respond("Invalid arguments to save a note.")
+            return
+
+        trigger = ctx.args[0]
+        if trigger.startswith("#") or "." in trigger or "$" in trigger:
+            await ctx.respond("Trigger cannot contain '#', '.', or '$' characters.")
+            return
+
+        text, types, content, buttons = await util.run_sync(get_message_info, ctx.msg)
+
+        await self.db.update_one(
+            {"_id": 0},
+            {
+                "$set": {
+                    "chat_name": "Global",
+                    f"notes.{trigger}": {
+                        "text": text,
+                        "type": types,
+                        "content": content,
+                        "button": buttons,
+                    },
+                }
+            },
+            upsert=True,
+        )
+        await ctx.respond(f"Note **{trigger}** has been saved.")
+
+    @command.desc("List all saved notes")
+    async def cmd_notes(self, ctx: command.Context) -> None:
+        data = await self.db.find_one({"_id": 0})
+        if not data or not data.get("notes"):
+            await ctx.respond("There are no saved notes.")
+            return
+
+        notes = data["notes"]
+        note_list = sorted(notes.keys())
+        response = "**Saved Notes**:\n\n"
+        response += "\n".join(f"`#{name}`" for name in note_list)
+        await ctx.respond(response)
+
+    @command.alias("clear")
+    @command.desc("Delete a saved note")
+    async def cmd_delnote(self, ctx: command.Context) -> None:
+        if not ctx.input:
+            await ctx.respond("Please provide the note name to delete.")
+            return
+
+        name = ctx.input
+        data = await self.db.find_one({"_id": 0, f"notes.{name}": {"$exists": True}})
+        if not data:
+            await ctx.respond("That note does not exist.")
+            return
+
+        notes: MutableMapping[str, Any] = data["notes"]
+        if name not in notes:
+            await ctx.respond("Note does not exist in database.")
+            return
+
+        await self.db.update_one({"_id": 0}, {"$unset": {f"notes.{name}": ""}})
+        await ctx.respond(f"Note **{name}** has been deleted.")

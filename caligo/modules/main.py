@@ -51,7 +51,8 @@ class Main(module.Module):
         return buttons
 
     async def on_inline_query(self, query: types.InlineQuery) -> None:
-
+        if query.query:
+            return
         answer = [
             types.InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
