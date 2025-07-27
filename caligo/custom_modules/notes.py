@@ -30,7 +30,7 @@ class Notes(module.Module):
 
     async def on_load(self):
         self.log_chat = self.bot.config["bot"]["log_chat"]
-        self.db = self.bot.db.get_collection("NOTES")
+        self.db = self.bot.db.get_collection(self.name.upper())
         self.state = {}
         self.SEND = {
             Types.TEXT.value: self.bot.client.send_message,
