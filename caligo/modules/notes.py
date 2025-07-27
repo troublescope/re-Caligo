@@ -217,7 +217,8 @@ class Notes(module.Module):
         )
         await _tmp_msg.delete()
 
-    @command.desc("Show a saved note")
+    @command.desc("Retrieve a saved note by its name.")
+    @command.usage("get <notename>")
     async def cmd_get(self, ctx: command.Context) -> None:
         if not ctx.input:
             return
@@ -226,9 +227,11 @@ class Notes(module.Module):
         else:
             await self.get_note(ctx.msg, ctx.args[0])
 
-    @command.desc("Save a note")
+    @command.desc(
+        "Save a new note by name. You can also reply to a message to save it."
+    )
     @command.alias("addnote")
-    @command.usage("save [reply to message or input]")
+    @command.usage("save <notename> <note text> or reply to media/text")
     async def cmd_save(self, ctx: command.Context) -> None:
         if (
             len(ctx.args) < 2
@@ -236,7 +239,17 @@ class Notes(module.Module):
             or ctx.msg.reply_to_message
             and len(ctx.args) < 1
         ):
-            await ctx.respond("Invalid arguments to save a note.")
+            text = (
+                "Invalid arguments to save a note.\n\n"
+                "<blockquote expandable><b>Usage:</b> save <code>notename note text</code> or reply to media/text.\n\n"
+                "<b>Button formatting:</b>\n"
+                "•  [Label](buttonurl://https://example.com)\n"
+                "•  [Label](buttoncopy://Copied Text)\n"
+                "•  [Btn1](buttonurl://url1)\n"
+                "•  [Btn2](buttonurl://url2:same)\n"
+                "Use :same to place buttons on the same row.</blockquote>"
+            )
+            await ctx.msg.edit(text, parse_mode=ParseMode.HTML)
             return
 
         trigger = ctx.args[0]
@@ -275,8 +288,9 @@ class Notes(module.Module):
         response += "\n".join(f"`#{name}`" for name in note_list)
         await ctx.respond(response)
 
+    @command.desc("Delete a saved note by name.")
     @command.alias("clear")
-    @command.desc("Delete a saved note")
+    @command.usage("delnote <notename>")
     async def cmd_delnote(self, ctx: command.Context) -> None:
         if not ctx.input:
             await ctx.respond("Please provide the note name to delete.")
