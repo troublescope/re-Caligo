@@ -144,7 +144,7 @@ class Notes(module.Module):
                 pass
             return
 
-        # Case: button text only (no media)
+        # Case: button-text only
         if types == Types.BUTTON_TEXT.value and button:
             key = f"note_{uuid.uuid4().hex}"
             self.state[key] = [
@@ -171,7 +171,7 @@ class Notes(module.Module):
             )
             return
 
-        # Case: text-only note (no media)
+        # Case: text only
         if not content:
             await self.SEND[types](
                 chat.id,
@@ -185,12 +185,22 @@ class Notes(module.Module):
             )
             return
 
-        # Case: cached media
+        if not button:
+            await self.SEND[types](
+                chat.id,
+                content,
+                caption=text,
+                reply_to_message_id=reply_to,
+                reply_markup=None,
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+
         _tmp_msg = await self.bot.client.send_cached_media(
             self.log_chat, content, caption=text
         )
         _msgbot = await self.bot.client_helper.get_messages(self.log_chat, _tmp_msg.id)
-        btn_markup = await util.run_sync(build_button, button) if button else None
+        btn_markup = await util.run_sync(build_button, button)
 
         inline = await self._generate_inline_result(_msgbot, btn_markup)
         key = f"note_{uuid.uuid4().hex}"
@@ -285,8 +295,3 @@ class Notes(module.Module):
 
         await self.db.update_one({"_id": 0}, {"$unset": {f"notes.{name}": ""}})
         await ctx.respond(f"Note **{name}** has been deleted.")
-
-    @command.desc("Clean up chat_name field from notes document")
-    async def cmd_cleanup_notes(self, ctx: command.Context) -> None:
-        await self.db.update_one({"_id": 0}, {"$unset": {"chat_name": ""}})
-        await ctx.respond("Field `chat_name` has been removed from the notes document.")
