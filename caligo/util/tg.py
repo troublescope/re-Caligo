@@ -290,9 +290,7 @@ def build_button(buttons: Button) -> InlineKeyboardMarkup:
 def revert_button(button: Button) -> str:
     """Revert button format"""
     res = ""
-    for btn in button:
-        if btn[2]:
-            res += f"\n[{btn[0]}](buttonurl://{btn[1]}:same)"
-        else:
-            res += f"\n[{btn[0]}](buttonurl://{btn[1]})"
+    for label, _type, _text, _same in button:
+        newline = ":same" if _same else ""
+        res += f"\n[{label}](button{_type}://{_text}{newline})"
     return res
