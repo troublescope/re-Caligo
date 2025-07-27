@@ -4,15 +4,8 @@ from typing import Any, Callable, ClassVar, Coroutine, MutableMapping, Optional
 
 from pyrogram import filters, types
 from pyrogram.enums.parse_mode import ParseMode
-from pyrogram.errors import MediaEmpty, MessageEmpty
-from pyrogram.types import (
-    InlineKeyboardButton,
-    InlineQuery,
-    InlineQueryResult,
-    InlineQueryResultArticle,
-    InputTextMessageContent,
-    Message,
-)
+from pyrogram.errors import ButtonUrlInvalid, MediaEmpty, MessageEmpty
+from pyrogram.types import InlineKeyboardButton, InlineQuery, InlineQueryResult, Message
 
 from caligo import command, listener, module, util
 from caligo.core import database
@@ -74,8 +67,17 @@ class Notes(module.Module):
         if not results:
             await event.stop_propagation()
             return
-        await event.answer(results=results, cache_time=0)
-        await asyncio.to_thread(self.state.pop, event.query, None)
+        try:
+            await event.answer(results=results, cache_time=0)
+        except Exception as e:
+            await self.bot.client.send_message(
+                self.log_chat,
+                f"<b>Failed to send inline note result</b>\n"
+                f"<b>Reason:</b> <code>{e}</code>",
+                parse_mode=ParseMode.HTML,
+            )
+        finally:
+            await asyncio.to_thread(self.state.pop, event.query, None)
 
     @listener.priority(95)
     @listener.filters(filters.regex(r"^#[\w\-]+(?!\n)$") & filters.me)
@@ -144,21 +146,38 @@ class Notes(module.Module):
                 pass
             return
 
-        # Case: button-text only
-        if types == Types.BUTTON_TEXT.value and button:
+        # fallback if button is invalid
+        try:
+            btn_markup = await util.run_sync(build_button, button) if button else None
+        except ButtonUrlInvalid as e:
+            await self.bot.client.send_message(
+                self.log_chat,
+                f"⚠️ <b>Invalid button detected for note:</b> <code>{name}</code>\n"
+                f"<b>Error:</b> <code>{e}</code>",
+                parse_mode=ParseMode.HTML,
+            )
+            btn_markup = None
+
+        if not content:
+            await self.SEND[types](
+                chat.id,
+                text,
+                reply_to_message_id=reply_to,
+                disable_web_page_preview=True,
+                reply_markup=btn_markup,
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+
+        _tmp_msg = await self.bot.client.send_cached_media(
+            self.log_chat, content, caption=text
+        )
+        _msgbot = await self.bot.client_helper.get_messages(self.log_chat, _tmp_msg.id)
+
+        try:
+            inline = await self._generate_inline_result(_msgbot, btn_markup)
             key = f"note_{uuid.uuid4().hex}"
-            self.state[key] = [
-                InlineQueryResultArticle(
-                    title=f"Note: {name}",
-                    description=text,
-                    input_message_content=InputTextMessageContent(
-                        message_text=text,
-                        parse_mode=ParseMode.MARKDOWN,
-                    ),
-                    reply_markup=await util.run_sync(build_button, button),
-                    id=key,
-                )
-            ]
+            self.state[key] = [inline]
             results = await self.bot.client.get_inline_bot_results(
                 self.bot.client_helper.me.username, key
             )
@@ -169,53 +188,16 @@ class Notes(module.Module):
                 result_id=results.results[0].id,
                 reply_to_message_id=reply_to,
             )
-            return
-
-        # Case: text only
-        if not content:
-            await self.SEND[types](
+        except (IndexError, ButtonUrlInvalid):
+            await self.bot.client.send_message(
                 chat.id,
                 text,
                 reply_to_message_id=reply_to,
                 disable_web_page_preview=True,
-                reply_markup=(
-                    await util.run_sync(build_button, button) if button else None
-                ),
                 parse_mode=ParseMode.MARKDOWN,
             )
-            return
-
-        if not button:
-            await self.SEND[types](
-                chat.id,
-                content,
-                caption=text,
-                reply_to_message_id=reply_to,
-                reply_markup=None,
-                parse_mode=ParseMode.MARKDOWN,
-            )
-            return
-
-        _tmp_msg = await self.bot.client.send_cached_media(
-            self.log_chat, content, caption=text
-        )
-        _msgbot = await self.bot.client_helper.get_messages(self.log_chat, _tmp_msg.id)
-        btn_markup = await util.run_sync(build_button, button)
-
-        inline = await self._generate_inline_result(_msgbot, btn_markup)
-        key = f"note_{uuid.uuid4().hex}"
-        self.state[key] = [inline]
-        results = await self.bot.client.get_inline_bot_results(
-            self.bot.client_helper.me.username, key
-        )
-
-        await self.bot.client.send_inline_bot_result(
-            chat_id=chat.id,
-            query_id=results.query_id,
-            result_id=results.results[0].id,
-            reply_to_message_id=reply_to,
-        )
-        await _tmp_msg.delete()
+        finally:
+            await _tmp_msg.delete()
 
     @command.desc("Retrieve a saved note by its name.")
     @command.usage("get <notename>")
