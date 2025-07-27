@@ -29,8 +29,9 @@ class Notes(module.Module):
     log_chat: int
 
     async def on_load(self):
-        self.log_chat = self.bot.config["bot"]["log_chat"]
         self.db = self.bot.db.get_collection(self.name.upper())
+        self.log_chat = self.bot.config["bot"]["log_chat"]
+
         self.state = {}
         self.SEND = {
             Types.TEXT.value: self.bot.client.send_message,
@@ -48,8 +49,7 @@ class Notes(module.Module):
     async def _generate_inline_result(
         self, msg: Message, btn: list[InlineKeyboardButton]
     ) -> InlineQueryResult:
-        """msg._client must be bot"""
-        parameters: dict[str, any] = {"reply_markup": btn}
+        parameters: dict[str, Any] = {"reply_markup": btn}
 
         if not msg.media:
             raise TypeError("Must be a Message Media Object")
@@ -102,6 +102,7 @@ class Notes(module.Module):
         button = note.get("button")
         types = note["type"]
         text = note["text"] or name
+        content = note.get("content")
 
         if noformat:
             parse_mode = ParseMode.DISABLED
@@ -120,14 +121,14 @@ class Notes(module.Module):
                 elif types == Types.STICKER:
                     await self.SEND[types](
                         chat.id,
-                        note["content"],
+                        content,
                         reply_to_message_id=reply_to,
                         reply_markup=keyb,
                     )
                 else:
                     await self.SEND[types](
                         chat.id,
-                        str(note["content"]),
+                        str(content),
                         caption=text + btn_text,
                         reply_to_message_id=reply_to,
                         reply_markup=keyb,
@@ -143,6 +144,7 @@ class Notes(module.Module):
                 pass
             return
 
+        # Case: button text only (no media)
         if types == Types.BUTTON_TEXT.value and button:
             key = f"note_{uuid.uuid4().hex}"
             self.state[key] = [
@@ -169,13 +171,27 @@ class Notes(module.Module):
             )
             return
 
+        # Case: text-only note (no media)
+        if not content:
+            await self.SEND[types](
+                chat.id,
+                text,
+                reply_to_message_id=reply_to,
+                disable_web_page_preview=True,
+                reply_markup=(
+                    await util.run_sync(build_button, button) if button else None
+                ),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            return
+
+        # Case: cached media
         _tmp_msg = await self.bot.client.send_cached_media(
-            self.log_chat, note["content"], caption=text
+            self.log_chat, content, caption=text
         )
-        _msgbot, btn_markup = await asyncio.gather(
-            self.bot.client_helper.get_messages(self.log_chat, _tmp_msg.id),
-            util.run_sync(build_button, button),
-        )
+        _msgbot = await self.bot.client_helper.get_messages(self.log_chat, _tmp_msg.id)
+        btn_markup = await util.run_sync(build_button, button) if button else None
+
         inline = await self._generate_inline_result(_msgbot, btn_markup)
         key = f"note_{uuid.uuid4().hex}"
         self.state[key] = [inline]
@@ -224,11 +240,10 @@ class Notes(module.Module):
             {"_id": 0},
             {
                 "$set": {
-                    "chat_name": "Global",
                     f"notes.{trigger}": {
                         "text": text,
                         "type": types,
-                        "content": content,
+                        "content": content if content else None,
                         "button": buttons,
                     },
                 }
@@ -270,3 +285,8 @@ class Notes(module.Module):
 
         await self.db.update_one({"_id": 0}, {"$unset": {f"notes.{name}": ""}})
         await ctx.respond(f"Note **{name}** has been deleted.")
+
+    @command.desc("Clean up chat_name field from notes document")
+    async def cmd_cleanup_notes(self, ctx: command.Context) -> None:
+        await self.db.update_one({"_id": 0}, {"$unset": {"chat_name": ""}})
+        await ctx.respond("Field `chat_name` has been removed from the notes document.")
