@@ -198,7 +198,7 @@ def get_message_info(msg: Message) -> Tuple[str, Types, Optional[str], Button]:
         elif reply_msg.document:
             content, types = reply_msg.document.file_id, Types.DOCUMENT
         elif reply_msg.photo:
-            content, types = reply_msg.photo.file_id, Types.PHOTO
+            content, types = reply_msg.photo.sizes[-1].file_id, Types.PHOTO
         elif reply_msg.audio:
             content, types = reply_msg.audio.file_id, Types.AUDIO
         elif reply_msg.voice:
