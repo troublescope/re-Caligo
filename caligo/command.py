@@ -149,48 +149,41 @@ class Context:
         self.response = None  # type: ignore
         self.response_mode = None
 
-        self.input = self.msg.content[self.cmd_len :]
+        self.input = self.msg.text[self.cmd_len :] if self.msg.text else ""
 
         # Parse flags from command if not provided
-        if flags is None:
-            self.flags = self._parse_flags()
-        else:
-            self.flags = flags
+        self.flags = flags if flags is not None else self._parse_flags()
 
     def _parse_flags(self) -> dict[str, Any]:
-        """Parse flags from command segments (e.g., --flag value or -f)"""
-        flags = {}
-        args = list(self.segments[1:])  # Skip command name
-        i = 0
+        """Parse flags from command segments (e.g., --flag=value or -f block until next flag)"""
+        flags: dict[str, Any] = {}
+        args = self.segments[1:]  # Skip command name
+        current_flag: Optional[str] = None
+        buffer: list[str] = []
 
-        while i < len(args):
-            arg = args[i]
+        def commit():
+            if current_flag is not None:
+                flags[current_flag] = " ".join(buffer) if buffer else True
 
-            # Long flag format: --flag or --flag=value
-            if arg.startswith("--"):
-                flag_name = arg[2:]
-                if "=" in flag_name:
-                    key, value = flag_name.split("=", 1)
-                    flags[key] = value
+        for arg in args:
+            if (
+                arg.startswith("-")
+                and not arg.lstrip("-").replace(".", "", 1).isdigit()
+            ):
+                if "=" in arg:
+                    commit()
+                    key, val = arg.lstrip("-").split("=", 1)
+                    flags[key] = val
+                    current_flag = None
+                    buffer = []
                 else:
-                    # Check if next argument is a value
-                    if i + 1 < len(args) and not args[i + 1].startswith("-"):
-                        flags[flag_name] = args[i + 1]
-                        i += 1  # Skip the value
-                    else:
-                        flags[flag_name] = True  # Boolean flag
+                    commit()
+                    current_flag = arg.lstrip("-")
+                    buffer = []
+            else:
+                buffer.append(arg)
 
-            # Short flag format: -f or -f value
-            elif arg.startswith("-") and len(arg) > 1:
-                flag_name = arg[1:]
-                if i + 1 < len(args) and not args[i + 1].startswith("-"):
-                    flags[flag_name] = args[i + 1]
-                    i += 1  # Skip the value
-                else:
-                    flags[flag_name] = True  # Boolean flag
-
-            i += 1
-
+        commit()
         return flags
 
     def __getattr__(self, name: str) -> Any:
