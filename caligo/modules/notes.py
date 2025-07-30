@@ -68,7 +68,7 @@ class Notes(module.Module):
             **parameters
         )
 
-    @listener.filters(filters.regex(r"^note_\w+$"))
+    @listener.filters(filters.regex(r"^notes\([a-f0-9]{32}\)$"))
     async def on_inline_query(self, event: InlineQuery) -> None:
         results = self.state.get(event.query)
         if not results:
@@ -168,7 +168,7 @@ class Notes(module.Module):
         if not content:
             if btn_markup:
                 try:
-                    key = f"note_{uuid.uuid4().hex}"
+                    key = f"notes({uuid.uuid4().hex})"
                     self.state[key] = [
                         InlineQueryResultArticle(
                             title=f"Note: {name}",
@@ -221,7 +221,7 @@ class Notes(module.Module):
 
         try:
             inline = await self._generate_inline_result(_msgbot, btn_markup)
-            key = f"note_{uuid.uuid4().hex}"
+            key = f"notes({uuid.uuid4().hex})"
             self.state[key] = [inline]
             results = await self.bot.client.get_inline_bot_results(
                 self.bot.client_helper.me.username, key
