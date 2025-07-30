@@ -2,10 +2,17 @@ import asyncio
 import uuid
 from typing import Any, Callable, ClassVar, Coroutine, MutableMapping, Optional
 
-from pyrogram import filters, types
+from pyrogram import filters
 from pyrogram.enums.parse_mode import ParseMode
 from pyrogram.errors import ButtonUrlInvalid, MediaEmpty, MessageEmpty
-from pyrogram.types import InlineKeyboardButton, InlineQuery, InlineQueryResult, Message
+from pyrogram.types import (
+    InlineKeyboardButton,
+    InlineQuery,
+    InlineQueryResult,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    Message,
+)
 
 from caligo import command, listener, module, util
 from caligo.core import database
@@ -159,14 +166,52 @@ class Notes(module.Module):
             btn_markup = None
 
         if not content:
-            await self.SEND[types](
-                chat.id,
-                text,
-                reply_to_message_id=reply_to,
-                disable_web_page_preview=True,
-                reply_markup=btn_markup,
-                parse_mode=ParseMode.MARKDOWN,
-            )
+            if btn_markup:
+                try:
+                    key = f"note_{uuid.uuid4().hex}"
+                    self.state[key] = [
+                        InlineQueryResultArticle(
+                            title=f"Note: {name}",
+                            input_message_content=InputTextMessageContent(
+                                message_text=text,
+                                parse_mode=ParseMode.MARKDOWN,
+                                disable_web_page_preview=True,
+                            ),
+                            reply_markup=btn_markup,
+                            description=text[:50] + ("..." if len(text) > 50 else ""),
+                        )
+                    ]
+                    results = await self.bot.client.get_inline_bot_results(
+                        self.bot.client_helper.me.username, key
+                    )
+                    await self.bot.client.send_inline_bot_result(
+                        chat_id=chat.id,
+                        query_id=results.query_id,
+                        result_id=results.results[0].id,
+                        reply_to_message_id=reply_to,
+                    )
+                except Exception as e:
+                    await self.bot.client.send_message(
+                        self.log_chat,
+                        f"<b>Failed to send inline text note:</b> <code>{name}</code>\n<code>{e}</code>",
+                        parse_mode=ParseMode.HTML,
+                    )
+                    await self.SEND[types](
+                        chat.id,
+                        text,
+                        reply_to_message_id=reply_to,
+                        disable_web_page_preview=True,
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=btn_markup,
+                    )
+            else:
+                await self.SEND[types](
+                    chat.id,
+                    text,
+                    reply_to_message_id=reply_to,
+                    disable_web_page_preview=True,
+                    parse_mode=ParseMode.MARKDOWN,
+                )
             return
 
         _tmp_msg = await self.bot.client.send_cached_media(
