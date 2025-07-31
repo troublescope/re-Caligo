@@ -1,12 +1,11 @@
-import platform
 import uuid
 from collections import defaultdict
 from typing import ClassVar, List, MutableMapping
 
-from pyrogram import enums, errors, filters, types
+from pyrogram import errors, filters, types
 from pyrogram.utils import get_channel_id, unpack_inline_message_id
 
-from caligo import __version__, command, listener, module, util
+from caligo import command, listener, module, util
 from caligo.core import database
 
 
@@ -141,7 +140,7 @@ class Main(module.Module):
 
         response = None
         for mod_name, commands in sorted(modules.items()):
-            response = util.text.join_map(commands, heading=mod_name)
+            response = util.text.join_map(commands, heading=mod_name, parse_mode="html")
 
         if response is not None:
             button = [
@@ -259,58 +258,3 @@ class Main(module.Module):
             {"_id": 0}, {"$set": {"prefix": new_prefix}}, upsert=True
         )
         return f"<b>Prefix set to:</b> <code>{self.bot.prefix}</code>"
-
-    @command.desc("Get information about this bot instance")
-    @command.alias("botinfo")
-    async def cmd_info(self, ctx: command.Context) -> None:
-        commit = await util.run_sync(util.version.get_commit)
-        dirty = ", dirty" if await util.run_sync(util.git.is_dirty) else ""
-        unofficial = (
-            ", unofficial" if not await util.run_sync(util.git.is_official) else ""
-        )
-        version = (
-            f"{__version__} (<code>{commit}</code>{dirty}{unofficial})"
-            if commit
-            else __version__
-        )
-
-        sys_ver = platform.release()
-        try:
-            sys_ver = sys_ver[: sys_ver.index("-")]
-        except ValueError:
-            pass
-
-        now = util.time.usec()
-        uptime = util.time.format_duration_us(now - self.bot.start_time_us)
-
-        stats_module = self.bot.modules.get("Stats", None)
-        get_start_time = getattr(stats_module, "get_start_time", None)
-        total_uptime = None
-        if stats_module and callable(get_start_time):
-            stats_start_time = await get_start_time()
-            total_uptime = util.time.format_duration_us(now - stats_start_time) + "\n"
-        else:
-            uptime += "\n"
-
-        num_chats = await self.bot.client.get_dialogs_count()
-
-        response = util.text.join_map(
-            {
-                "Version": version,
-                "Python": f"{platform.python_implementation()} {platform.python_version()}",
-                "System": f"{platform.system()} {sys_ver}",
-                "Uptime": uptime,
-                **({"Total uptime": total_uptime} if total_uptime else {}),
-                "Commands loaded": len(self.bot.commands),
-                "Modules loaded": len(self.bot.modules),
-                "Listeners loaded": sum(
-                    len(evt) for evt in self.bot.listeners.values()
-                ),
-                "Events activated": f"{self.bot.events_activated}\n",
-                "Chats": num_chats,
-            },
-            heading='<a href="https://github.com/troublescope/re-caligo">RE-Caligo</a> info',
-            parse_mode="html",
-        )
-
-        await ctx.respond(response, parse_mode=enums.ParseMode.HTML)

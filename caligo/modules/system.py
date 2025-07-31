@@ -1,15 +1,17 @@
 import asyncio
 import os
+import platform
 import sys
 from html import escape
 from typing import Any, ClassVar, Mapping, Optional
 
 import speedtest
 from aiopath import AsyncPath
+from pyrogram import enums
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 
-from caligo import command, module, util
+from caligo import __version__, command, module, util
 from caligo.core import database
 
 
@@ -21,6 +23,7 @@ class System(module.Module):
 
     async def on_load(self):
         self.restart_pending = False
+        self.repo = self.bot.config["bot"]["git_url"]
 
         self.db = self.bot.db.get_collection(self.name.upper())
 
@@ -255,3 +258,58 @@ Dependency updates are automatic if you're running the bot in a virtualenv."""
 
         # Restart after updating
         return await self.cmd_restart(ctx, restart_time=update_time, reason="update")
+
+    @command.desc("Get information about this bot instance")
+    @command.alias("botinfo")
+    async def cmd_info(self, ctx: command.Context) -> None:
+        commit = await util.run_sync(util.version.get_commit)
+        dirty = ", dirty" if await util.run_sync(util.git.is_dirty) else ""
+        unofficial = (
+            ", unofficial" if not await util.run_sync(util.git.is_official) else ""
+        )
+        version = (
+            f"{__version__} (<code>{commit}</code>{dirty}{unofficial})"
+            if commit
+            else __version__
+        )
+
+        sys_ver = platform.release()
+        try:
+            sys_ver = sys_ver[: sys_ver.index("-")]
+        except ValueError:
+            pass
+
+        now = util.time.usec()
+        uptime = util.time.format_duration_us(now - self.bot.start_time_us)
+
+        stats_module = self.bot.modules.get("Stats", None)
+        get_start_time = getattr(stats_module, "get_start_time", None)
+        total_uptime = None
+        if stats_module and callable(get_start_time):
+            stats_start_time = await get_start_time()
+            total_uptime = util.time.format_duration_us(now - stats_start_time) + "\n"
+        else:
+            uptime += "\n"
+
+        num_chats = await self.bot.client.get_dialogs_count()
+
+        response = util.text.join_map(
+            {
+                "Version": version,
+                "Python": f"{platform.python_implementation()} {platform.python_version()}",
+                "System": f"{platform.system()} {sys_ver}",
+                "Uptime": uptime,
+                **({"Total uptime": total_uptime} if total_uptime else {}),
+                "Commands loaded": len(self.bot.commands),
+                "Modules loaded": len(self.bot.modules),
+                "Listeners loaded": sum(
+                    len(evt) for evt in self.bot.listeners.values()
+                ),
+                "Events activated": f"{self.bot.events_activated}\n",
+                "Chats": num_chats,
+            },
+            heading='<a href="https://github.com/troublescope/re-caligo">RE-Caligo</a> info',
+            parse_mode="html",
+        )
+
+        await ctx.respond(response, parse_mode=enums.ParseMode.HTML)
