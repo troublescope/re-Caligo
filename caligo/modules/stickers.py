@@ -128,15 +128,15 @@ class Sticker(module.Module):
         except Exception as e:
             return False, f"Failed to create sticker pack: {e}"
 
-    @command.desc("Copy a sticker into another pack")
+    @command.desc("Copy a sticker to your own sticker pack")
     @command.alias("stickercopy", "kang")
-    @command.usage("[sticker pack VOL number? if not set] [emoji?]", optional=True)
+    @command.usage("[emoji?] [vol?] or --emoji=😊 --vol=2", optional=True)
     async def cmd_copysticker(self, ctx: command.Context) -> str:
         reply = ctx.msg.reply_to_message
         if not reply:
             return "__Reply to a sticker to copy it.__"
         if not reply.media:
-            return "__Ewww can't kang that.__"
+            return "__This media can't be copied as a sticker.__"
 
         await ctx.respond("__Preparing...__")
 
@@ -168,10 +168,15 @@ class Sticker(module.Module):
         ):
             video, resize = True, True
 
-        for arg in ctx.args:
-            emoji = arg if util.text.has_emoji(arg) else emoji
-            if arg.isdigit():
-                vol = int(arg)
+        # Process emoji and volume from flags
+        for key, val in ctx.flags.items():
+            if isinstance(key, str) and util.text.has_emoji(key):
+                emoji = key
+            if isinstance(val, str):
+                if val.isdigit():
+                    vol = int(val)
+                elif util.text.has_emoji(val):
+                    emoji = val
 
         media_path = await reply.download()
         if not media_path:
@@ -238,7 +243,7 @@ class Sticker(module.Module):
                         set_name += "_video"
                         set_title += " (Video)"
                     await ctx.respond(
-                        f"Pack VOL {vol - 1} full. Switching to VOL {vol}..."
+                        f"Pack VOL {vol - 1} is full. Switching to VOL {vol}..."
                     )
                     continue
                 break

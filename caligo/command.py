@@ -158,28 +158,49 @@ class Context:
         """Parse flags from ctx.input (already Markdown-parsed)."""
         flags: dict[str, Any] = {}
         tokens = self.input.split()
-        current_flag: Optional[str] = None
-        buffer: list[str] = []
 
-        def commit():
-            if current_flag is not None:
-                flags[current_flag] = " ".join(buffer) if buffer else True
+        # Jika ada token dengan '-' di awal, pakai mode normal
+        has_flag = any(t.startswith("-") for t in tokens)
 
-        for token in tokens:
-            if token.startswith("--") and "=" in token:
-                commit()
-                key, val = token[2:].split("=", 1)
-                flags[util.text.strip_md_key(key)] = val
-                current_flag = None
-                buffer = []
-            elif token.startswith("-") and not token[1:].replace(".", "", 1).isdigit():
-                commit()
-                current_flag = util.text.strip_md_key(token.lstrip("-"))
-                buffer = []
-            else:
-                buffer.append(token)
+        if has_flag:
+            current_flag: Optional[str] = None
+            buffer: list[str] = []
 
-        commit()
+            def commit():
+                if current_flag is not None:
+                    flags[current_flag] = " ".join(buffer) if buffer else True
+
+            for token in tokens:
+                if token.startswith("--") and "=" in token:
+                    commit()
+                    key, val = token[2:].split("=", 1)
+                    flags[util.text.strip_md_key(key)] = val
+                    current_flag = None
+                    buffer = []
+                elif (
+                    token.startswith("-")
+                    and not token[1:].replace(".", "", 1).isdigit()
+                ):
+                    commit()
+                    current_flag = util.text.strip_md_key(token.lstrip("-"))
+                    buffer = []
+                else:
+                    buffer.append(token)
+
+            commit()
+
+        else:
+            # fallback mode: key value key value ...
+            i = 0
+            while i < len(tokens):
+                key = util.text.strip_md_key(tokens[i])
+                value: Any = True
+                if i + 1 < len(tokens) and not tokens[i + 1].startswith("-"):
+                    value = tokens[i + 1]
+                    i += 1
+                flags[key] = value
+                i += 1
+
         return flags
 
     async def listen(
