@@ -185,6 +185,18 @@ class Context:
     async def listen(
         self, handler_type: Type, filters: Filter, timeout: int = 10, group: int = -999
     ) -> T | None:
+        """
+        Listen for a specific type of update with given filters.
+
+        Args:
+            handler_type: The handler type (MessageHandler, CallbackQueryHandler, etc.)
+            filters: Pyrogram filters to match against
+            timeout: Maximum time to wait for the update (in seconds)
+            group: Handler group number
+
+        Returns:
+            The matching update or None if timeout occurred
+        """
         future = asyncio.get_running_loop().create_future()
 
         async def _callback(_, update: T):
