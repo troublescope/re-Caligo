@@ -35,3 +35,9 @@ def join_map(
 
 def has_emoji(text: str) -> bool:
     return any(c in emoji.unicode_codes.EMOJI_DATA for c in text)
+
+
+def strip_md_key(text: str) -> str:
+    """Remove markdown special chars from text."""
+    markdown_chars = "*_~`()[]"
+    return "".join(c for c in text if c not in markdown_chars).strip()
