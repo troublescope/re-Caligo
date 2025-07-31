@@ -2,7 +2,7 @@ import uuid
 from collections import defaultdict
 from typing import ClassVar, List, MutableMapping
 
-from pyrogram import errors, filters, types
+from pyrogram import enums, errors, filters, types
 from pyrogram.utils import get_channel_id, unpack_inline_message_id
 
 from caligo import command, listener, module, util
@@ -222,10 +222,14 @@ class Main(module.Module):
 
                 response = util.text.join_map(data, parse_mode="html")
 
-                return (
-                    f"<b>Help for <bold>{cmd.name}</bold></b>"
-                    f"<blockquote expandable>\n{response}\n</blockquote>"
+                await ctx.respond(
+                    text=(
+                        f"<b>Help for <bold>{cmd.name}</bold></b>"
+                        f"<blockquote expandable>\n{response}\n</blockquote>"
+                    ),
+                    parse_mode=enums.ParseMode.HTML,
                 )
+                return
 
             return "<i>That filter didn't match any commands or modules.</i>"
 
@@ -250,7 +254,11 @@ class Main(module.Module):
 
         # Final full expandable blockquote
         full_response = "\n\n".join(response_sections)
-        return f"<blockquote expandable>\n{full_response}\n</blockquote>"
+        await ctx.respond(
+            text=f"<blockquote expandable>\n{full_response}\n</blockquote>",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
 
     @command.desc("Get or change this bot prefix")
     @command.alias("setprefix", "getprefix")

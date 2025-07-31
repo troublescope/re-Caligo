@@ -13,6 +13,7 @@ from typing import (
     Union,
 )
 
+from pyrogram.enums import ParseMode
 from pyrogram.filters import Filter
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 from pyrogram.types import Chat, Message, Update
@@ -159,7 +160,6 @@ class Context:
         flags: dict[str, Any] = {}
         tokens = self.input.split()
 
-        # Jika ada token dengan '-' di awal, pakai mode normal
         has_flag = any(t.startswith("-") for t in tokens)
 
         if has_flag:
@@ -293,24 +293,66 @@ class Context:
         self,
         text: str = "",
         *,
-        mode: Optional[str] = None,
-        redact: bool = True,
+        mode: Optional[str] = "edit",
+        redact: bool = False,
         msg: Optional[Message] = None,
         reuse_response: bool = False,
         delete_after: Optional[Union[int, float]] = None,
+        multi: bool = False,
+        parse_mode: Optional[ParseMode] = None,
         **kwargs: Any,
     ) -> Message:
-        self.response = await self.bot.respond(
-            msg or self.msg,
-            text,
-            input_arg=self.input,
-            mode=mode,
-            redact=redact,
-            response=(
-                self.response if reuse_response and mode == self.response_mode else None
-            ),
-            **kwargs,
-        )
+        """
+        Send a response message with flexible behavior.
+
+        Args:
+            text (str): The message content to send.
+            mode (str, optional): The response mode: 'edit', 'reply', or 'repost'.
+            redact (bool): Whether to redact sensitive content before sending.
+            msg (Message, optional): The message to respond to. Defaults to ctx.msg.
+            reuse_response (bool): If True, reuse the previous response message if possible.
+            delete_after (float | int, optional): If set, deletes the response after N seconds.
+            multi (bool): If True, split long messages into multiple parts (up to max_pages).
+            parse_mode (ParseMode, optional): Pyrogram parse mode (e.g., ParseMode.HTML).
+            **kwargs: Additional keyword arguments passed to the send function.
+
+        Returns:
+            Message: The sent or edited response message.
+        """
+        msg = msg or self.msg
+
+        if redact:
+            text = self.bot.redact_message(text)
+
+        # If multi is enabled and message is long, use split logic
+        if multi and len(text) > util.tg.MESSAGE_CHAR_LIMIT:
+            return await self.respond_split(
+                text, mode=mode, parse_mode=parse_mode, **kwargs
+            )
+
+        # Apply parse_mode if specified
+        if parse_mode is not None:
+            kwargs["parse_mode"] = parse_mode
+
+        # Handle response based on mode
+        if mode == "edit":
+            self.response = await msg.edit(text=text, **kwargs)
+
+        elif mode == "reply":
+            if reuse_response and self.response:
+                self.response = await self.response.edit(text=text, **kwargs)
+            else:
+                if "disable_web_page_preview" not in kwargs:
+                    kwargs["disable_web_page_preview"] = True
+                self.response = await msg.reply(text, **kwargs)
+
+        elif mode == "repost":
+            self.response = await msg.reply(text, **kwargs)
+            await msg.delete()
+
+        else:
+            raise ValueError(f"Unknown response mode '{mode}'")
+
         self.response_mode = mode
 
         if delete_after:
