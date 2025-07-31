@@ -164,6 +164,7 @@ class Main(module.Module):
         await ctx.respond("<i>Processing...</i>")
         filt = ctx.input
         modules: MutableMapping[str, MutableMapping[str, str]] = defaultdict(dict)
+
         if self.bot.helper_initialized and not filt:
             response: Any
             try:
@@ -176,7 +177,7 @@ class Main(module.Module):
                 await ctx.msg.delete()
 
             if ctx.chat.is_forum:
-                res: Any = await self.bot.client.send_inline_bot_result(
+                await self.bot.client.send_inline_bot_result(
                     ctx.msg.chat.id,
                     response.query_id,
                     response.results[1].id,
@@ -184,10 +185,9 @@ class Main(module.Module):
                 )
             else:
                 try:
-                    res: Any = await self.bot.client.send_inline_bot_result(
+                    await self.bot.client.send_inline_bot_result(
                         ctx.msg.chat.id, response.query_id, response.results[1].id
                     )
-
                 except errors.FloodWait as e:
                     await asyncio.sleep(e.value)
             return
@@ -199,9 +199,10 @@ class Main(module.Module):
                 aliases = (
                     f"<code>{'</code>, <code>'.join(cmd.aliases)}</code>"
                     if cmd.aliases
-                    else "none"
+                    else None
                 )
-                args_desc = "none"
+
+                args_desc = None
                 if cmd.usage:
                     args_desc = cmd.usage
                     if cmd.usage_optional:
@@ -209,15 +210,21 @@ class Main(module.Module):
                     if cmd.usage_reply:
                         args_desc += " (also accepts replies)"
 
-                return util.text.join_map(
-                    {
-                        "Command": f"<code>{cmd.name}</code>",
-                        "Description": cmd.desc or "<i>No description provided.</i>",
-                        "Module": cmd.module.name,
-                        "Aliases": aliases,
-                        "Expected parameters": args_desc,
-                    },
-                    parse_mode="html",
+                data = {
+                    "Command": f"<code>{cmd.name}</code>",
+                    "Description": cmd.desc or "<i>No description provided.</i>",
+                    "Module": cmd.module.name,
+                }
+                if aliases:
+                    data["Aliases"] = aliases
+                if args_desc:
+                    data["Expected parameters"] = args_desc
+
+                response = util.text.join_map(data, parse_mode="html")
+
+                return (
+                    f"<b>Help for <bold>{cmd.name}</bold></b>"
+                    f"<blockquote expandable>\n{response}\n</blockquote>"
                 )
 
             return "<i>That filter didn't match any commands or modules.</i>"
