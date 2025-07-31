@@ -17,7 +17,14 @@ from pyrogram.handlers.chosen_inline_result_handler import ChosenInlineResultHan
 from pyrogram.handlers.deleted_messages_handler import DeletedMessagesHandler
 from pyrogram.handlers.inline_query_handler import InlineQueryHandler
 from pyrogram.handlers.message_handler import MessageHandler
-from pyrogram.types import CallbackQuery, InlineQuery, Message, ReplyParameters, User
+from pyrogram.types import (
+    CallbackQuery,
+    InlineQuery,
+    LinkPreviewOptions,
+    Message,
+    ReplyParameters,
+    User,
+)
 
 from caligo.util import tg, time
 
@@ -331,8 +338,8 @@ class TelegramBot(CaligoBase):
                 return response
 
         # Default to disabling link previews in responses
-        if "disable_web_page_preview" not in kwargs:
-            kwargs["disable_web_page_preview"] = True
+        if "link_preview_options" not in kwargs:
+            kwargs["link_preview_options"] = LinkPreviewOptions(is_disabled=True)
 
         # Use selected response mode if not overridden by invoker
         if mode is None:
@@ -356,7 +363,7 @@ class TelegramBot(CaligoBase):
 
             # Repost since we haven't done so yet
             if kwargs.get("document"):
-                del kwargs["disable_web_page_preview"]
+                del kwargs["link_preview_options"]
                 response = await msg.reply_document(**kwargs)
             else:
                 response = await msg.reply(
