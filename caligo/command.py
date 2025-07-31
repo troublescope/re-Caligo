@@ -13,6 +13,7 @@ from typing import (
     Union,
 )
 
+from pyrogram.enums import ParseMode
 from pyrogram.filters import Filter
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
 from pyrogram.types import Chat, Message, Update
@@ -126,7 +127,6 @@ class Context:
     response_mode: Optional[str]
 
     input: str
-    args: Sequence[str]
 
     def __init__(
         self,
@@ -153,81 +153,55 @@ class Context:
             self.msg.content.markdown[self.cmd_len :] if self.msg.content else ""
         )
 
-        # Parse flags from command if not provided
         self.flags = flags if flags is not None else self._parse_flags()
 
     def _parse_flags(self) -> dict[str, Any]:
-        """Parse flags from command segments (e.g., --flag=value or -f block until next flag)"""
+        """Parse flags from ctx.input (already Markdown-parsed)."""
         flags: dict[str, Any] = {}
-        args = self.segments[1:]  # Skip command name
-        current_flag: Optional[str] = None
-        buffer: list[str] = []
+        tokens = self.input.split()
 
-        def commit():
-            if current_flag is not None:
-                flags[current_flag] = " ".join(buffer) if buffer else True
+        has_flag = any(t.startswith("-") for t in tokens)
 
-        for arg in args:
-            if (
-                arg.startswith("-")
-                and not arg.lstrip("-").replace(".", "", 1).isdigit()
-            ):
-                if "=" in arg:
+        if has_flag:
+            current_flag: Optional[str] = None
+            buffer: list[str] = []
+
+            def commit():
+                if current_flag is not None:
+                    flags[current_flag] = " ".join(buffer) if buffer else True
+
+            for token in tokens:
+                if token.startswith("--") and "=" in token:
                     commit()
-                    key, val = arg.lstrip("-").split("=", 1)
-                    flags[key] = val
+                    key, val = token[2:].split("=", 1)
+                    flags[util.text.strip_md_key(key)] = val
                     current_flag = None
                     buffer = []
-                else:
+                elif (
+                    token.startswith("-")
+                    and not token[1:].replace(".", "", 1).isdigit()
+                ):
                     commit()
-                    current_flag = arg.lstrip("-")
+                    current_flag = util.text.strip_md_key(token.lstrip("-"))
                     buffer = []
-            else:
-                buffer.append(arg)
+                else:
+                    buffer.append(token)
 
-        commit()
+            commit()
+
+        else:
+            # fallback mode: key value key value ...
+            i = 0
+            while i < len(tokens):
+                key = util.text.strip_md_key(tokens[i])
+                value: Any = True
+                if i + 1 < len(tokens) and not tokens[i + 1].startswith("-"):
+                    value = tokens[i + 1]
+                    i += 1
+                flags[key] = value
+                i += 1
+
         return flags
-
-    def __getattr__(self, name: str) -> Any:
-        if name == "args":
-            return self._get_args()
-
-        raise AttributeError(
-            f"'{type(self).__name__}' object has no attribute '{name}'"
-        )
-
-    # Argument segments
-    def _get_args(self) -> Sequence[str]:
-        """Get arguments, filtering out flags"""
-        # Filter out flag arguments and their values
-        args = []
-        segments = list(self.segments[1:])  # Skip command name
-        i = 0
-
-        while i < len(segments):
-            arg = segments[i]
-
-            # Skip flag arguments
-            if arg.startswith("--"):
-                flag_name = arg[2:]
-                if "=" not in flag_name:
-                    # Check if next argument is a value for this flag
-                    if i + 1 < len(segments) and not segments[i + 1].startswith("-"):
-                        i += 1  # Skip the value too
-
-            elif arg.startswith("-") and len(arg) > 1:
-                # Check if next argument is a value for this flag
-                if i + 1 < len(segments) and not segments[i + 1].startswith("-"):
-                    i += 1  # Skip the value too
-
-            else:
-                # Regular argument
-                args.append(arg)
-
-            i += 1
-
-        self.args = args
-        return self.args
 
     async def listen(
         self, handler_type: Type, filters: Filter, timeout: int = 10, group: int = -999
@@ -251,7 +225,6 @@ class Context:
                 future.set_result(update)
 
         handler = handler_type(_callback, filters)
-        # Assuming the bot has a client attribute that's the Pyrogram Client
         client = getattr(self.bot, "client", self.bot)
         client.add_handler(handler, group)
 
@@ -278,12 +251,8 @@ class Context:
         """
         from pyrogram import filters as f
 
-        if filters is None:
-            filters = f.text & f.incoming
-
-        return await self.listen(
-            handler_type=MessageHandler, filters=filters, timeout=timeout, group=group
-        )
+        filters = filters or (f.text & f.incoming)
+        return await self.listen(MessageHandler, filters, timeout, group)
 
     async def listen_callback(
         self, filters: Optional[Filter] = None, timeout: int = 10, group: int = -999
@@ -300,10 +269,7 @@ class Context:
             The matching callback query or None if timeout occurred
         """
         return await self.listen(
-            handler_type=CallbackQueryHandler,
-            filters=filters or Filter(),
-            timeout=timeout,
-            group=group,
+            CallbackQueryHandler, filters or Filter(), timeout, group
         )
 
     async def _delete(
@@ -315,11 +281,11 @@ class Context:
 
         if delay:
 
-            async def delete(delay: float) -> None:
+            async def delete_later():
                 await asyncio.sleep(delay)
                 await content.delete(True)
 
-            self.bot.loop.create_task(delete(delay))
+            self.bot.loop.create_task(delete_later())
         else:
             await content.delete(True)
 
@@ -327,25 +293,66 @@ class Context:
         self,
         text: str = "",
         *,
-        mode: Optional[str] = None,
-        redact: bool = True,
+        mode: Optional[str] = "edit",
+        redact: bool = False,
         msg: Optional[Message] = None,
         reuse_response: bool = False,
         delete_after: Optional[Union[int, float]] = None,
+        multi: bool = False,
+        parse_mode: Optional[ParseMode] = None,
         **kwargs: Any,
     ) -> Message:
+        """
+        Send a response message with flexible behavior.
 
-        self.response = await self.bot.respond(
-            msg or self.msg,
-            text,
-            input_arg=self.input,
-            mode=mode,
-            redact=redact,
-            response=(
-                self.response if reuse_response and mode == self.response_mode else None
-            ),
-            **kwargs,
-        )
+        Args:
+            text (str): The message content to send.
+            mode (str, optional): The response mode: 'edit', 'reply', or 'repost'.
+            redact (bool): Whether to redact sensitive content before sending.
+            msg (Message, optional): The message to respond to. Defaults to ctx.msg.
+            reuse_response (bool): If True, reuse the previous response message if possible.
+            delete_after (float | int, optional): If set, deletes the response after N seconds.
+            multi (bool): If True, split long messages into multiple parts (up to max_pages).
+            parse_mode (ParseMode, optional): Pyrogram parse mode (e.g., ParseMode.HTML).
+            **kwargs: Additional keyword arguments passed to the send function.
+
+        Returns:
+            Message: The sent or edited response message.
+        """
+        msg = msg or self.msg
+
+        if redact:
+            text = self.bot.redact_message(text)
+
+        # If multi is enabled and message is long, use split logic
+        if multi and len(text) > util.tg.MESSAGE_CHAR_LIMIT:
+            return await self.respond_split(
+                text, mode=mode, parse_mode=parse_mode, **kwargs
+            )
+
+        # Apply parse_mode if specified
+        if parse_mode is not None:
+            kwargs["parse_mode"] = parse_mode
+
+        # Handle response based on mode
+        if mode == "edit":
+            self.response = await msg.edit(text=text, **kwargs)
+
+        elif mode == "reply":
+            if reuse_response and self.response:
+                self.response = await self.response.edit(text=text, **kwargs)
+            else:
+                if "disable_web_page_preview" not in kwargs:
+                    kwargs["disable_web_page_preview"] = True
+                self.response = await msg.reply(text, **kwargs)
+
+        elif mode == "repost":
+            self.response = await msg.reply(text, **kwargs)
+            await msg.delete()
+
+        else:
+            raise ValueError(f"Unknown response mode '{mode}'")
+
         self.response_mode = mode
 
         if delete_after:
@@ -358,7 +365,7 @@ class Context:
         self,
         text: str,
         *,
-        max_pages: Optional[int] = None,  # type: ignore
+        max_pages: Optional[int] = None,
         redact: Optional[bool] = None,
         **kwargs: Any,
     ) -> Message:
@@ -366,7 +373,7 @@ class Context:
             redact = self.bot.config["bot"]["redact_responses"]
 
         if max_pages is None:
-            max_pages: int = self.bot.config["bot"]["overflow_page_limit"]
+            max_pages = self.bot.config["bot"]["overflow_page_limit"]
 
         if redact:
             # Redact before splitting in case the sensitive content is on a message boundary
@@ -422,13 +429,8 @@ class Context:
             # After that, force a reply to the previous response
             if mode is None:
                 mode = "reply"
-
             if msg is None:
                 msg = self.response
-
-            if reuse_response is None:
-                reuse_response = False
-
         return await self.respond(
             *args, mode=mode, msg=msg, reuse_response=reuse_response, **kwargs
         )

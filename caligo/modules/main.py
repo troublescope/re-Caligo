@@ -1,4 +1,3 @@
-import platform
 import uuid
 from collections import defaultdict
 from typing import ClassVar, List, MutableMapping
@@ -6,7 +5,7 @@ from typing import ClassVar, List, MutableMapping
 from pyrogram import enums, errors, filters, types
 from pyrogram.utils import get_channel_id, unpack_inline_message_id
 
-from caligo import __version__, command, listener, module, util
+from caligo import command, listener, module, util
 from caligo.core import database
 
 
@@ -141,7 +140,7 @@ class Main(module.Module):
 
         response = None
         for mod_name, commands in sorted(modules.items()):
-            response = util.text.join_map(commands, heading=mod_name)
+            response = util.text.join_map(commands, heading=mod_name, parse_mode="html")
 
         if response is not None:
             button = [
@@ -165,6 +164,7 @@ class Main(module.Module):
         await ctx.respond("<i>Processing...</i>")
         filt = ctx.input
         modules: MutableMapping[str, MutableMapping[str, str]] = defaultdict(dict)
+
         if self.bot.helper_initialized and not filt:
             response: Any
             try:
@@ -177,7 +177,7 @@ class Main(module.Module):
                 await ctx.msg.delete()
 
             if ctx.chat.is_forum:
-                res: Any = await self.bot.client.send_inline_bot_result(
+                await self.bot.client.send_inline_bot_result(
                     ctx.msg.chat.id,
                     response.query_id,
                     response.results[1].id,
@@ -185,10 +185,9 @@ class Main(module.Module):
                 )
             else:
                 try:
-                    res: Any = await self.bot.client.send_inline_bot_result(
+                    await self.bot.client.send_inline_bot_result(
                         ctx.msg.chat.id, response.query_id, response.results[1].id
                     )
-
                 except errors.FloodWait as e:
                     await asyncio.sleep(e.value)
             return
@@ -200,9 +199,10 @@ class Main(module.Module):
                 aliases = (
                     f"<code>{'</code>, <code>'.join(cmd.aliases)}</code>"
                     if cmd.aliases
-                    else "none"
+                    else None
                 )
-                args_desc = "none"
+
+                args_desc = None
                 if cmd.usage:
                     args_desc = cmd.usage
                     if cmd.usage_optional:
@@ -210,16 +210,26 @@ class Main(module.Module):
                     if cmd.usage_reply:
                         args_desc += " (also accepts replies)"
 
-                return util.text.join_map(
-                    {
-                        "Command": f"<code>{cmd.name}</code>",
-                        "Description": cmd.desc or "<i>No description provided.</i>",
-                        "Module": cmd.module.name,
-                        "Aliases": aliases,
-                        "Expected parameters": args_desc,
-                    },
-                    parse_mode="html",
+                data = {
+                    "Command": f"<code>{cmd.name}</code>",
+                    "Description": cmd.desc or "<i>No description provided.</i>",
+                    "Module": cmd.module.name,
+                }
+                if aliases:
+                    data["Aliases"] = aliases
+                if args_desc:
+                    data["Expected parameters"] = args_desc
+
+                response = util.text.join_map(data, parse_mode="html")
+
+                await ctx.respond(
+                    text=(
+                        f"<b>Help for <bold>{cmd.name}</bold></b>"
+                        f"<blockquote expandable>\n{response}\n</blockquote>"
+                    ),
+                    parse_mode=enums.ParseMode.HTML,
                 )
+                return
 
             return "<i>That filter didn't match any commands or modules.</i>"
 
@@ -244,7 +254,11 @@ class Main(module.Module):
 
         # Final full expandable blockquote
         full_response = "\n\n".join(response_sections)
-        return f"<blockquote expandable>\n{full_response}\n</blockquote>"
+        await ctx.respond(
+            text=f"<blockquote expandable>\n{full_response}\n</blockquote>",
+            parse_mode=enums.ParseMode.HTML,
+        )
+        return
 
     @command.desc("Get or change this bot prefix")
     @command.alias("setprefix", "getprefix")
@@ -259,58 +273,3 @@ class Main(module.Module):
             {"_id": 0}, {"$set": {"prefix": new_prefix}}, upsert=True
         )
         return f"<b>Prefix set to:</b> <code>{self.bot.prefix}</code>"
-
-    @command.desc("Get information about this bot instance")
-    @command.alias("botinfo")
-    async def cmd_info(self, ctx: command.Context) -> None:
-        commit = await util.run_sync(util.version.get_commit)
-        dirty = ", dirty" if await util.run_sync(util.git.is_dirty) else ""
-        unofficial = (
-            ", unofficial" if not await util.run_sync(util.git.is_official) else ""
-        )
-        version = (
-            f"{__version__} (<code>{commit}</code>{dirty}{unofficial})"
-            if commit
-            else __version__
-        )
-
-        sys_ver = platform.release()
-        try:
-            sys_ver = sys_ver[: sys_ver.index("-")]
-        except ValueError:
-            pass
-
-        now = util.time.usec()
-        uptime = util.time.format_duration_us(now - self.bot.start_time_us)
-
-        stats_module = self.bot.modules.get("Stats", None)
-        get_start_time = getattr(stats_module, "get_start_time", None)
-        total_uptime = None
-        if stats_module and callable(get_start_time):
-            stats_start_time = await get_start_time()
-            total_uptime = util.time.format_duration_us(now - stats_start_time) + "\n"
-        else:
-            uptime += "\n"
-
-        num_chats = await self.bot.client.get_dialogs_count()
-
-        response = util.text.join_map(
-            {
-                "Version": version,
-                "Python": f"{platform.python_implementation()} {platform.python_version()}",
-                "System": f"{platform.system()} {sys_ver}",
-                "Uptime": uptime,
-                **({"Total uptime": total_uptime} if total_uptime else {}),
-                "Commands loaded": len(self.bot.commands),
-                "Modules loaded": len(self.bot.modules),
-                "Listeners loaded": sum(
-                    len(evt) for evt in self.bot.listeners.values()
-                ),
-                "Events activated": f"{self.bot.events_activated}\n",
-                "Chats": num_chats,
-            },
-            heading='<a href="https://github.com/troublescope/re-caligo">RE-Caligo</a> info',
-            parse_mode="html",
-        )
-
-        await ctx.respond(response, parse_mode=enums.ParseMode.HTML)
