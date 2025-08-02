@@ -30,7 +30,7 @@ RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
 # Package everything
-FROM python:3.12-alpine AS final
+FROM python:3.13-alpine AS final
 # Update system first
 RUN apk update
 
