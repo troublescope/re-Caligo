@@ -405,6 +405,7 @@ class Sticker(module.Module):
             )
         except Exception as e:
             return f"Failed to create sticker set: {e}"
-        return ctx.respond(
+        await ctx.respond(
             f"Sticker set copied successfully.\n[Click to open](https://t.me/addstickers/{target_name})"
         )
+        return
