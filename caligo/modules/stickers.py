@@ -1,10 +1,12 @@
 import io
 import mimetypes
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO, ClassVar
 
 from aiopath import AsyncPath
+from pyrogram import types
 from pyrogram.errors import StickersetInvalid
 from pyrogram.raw.functions.messages import GetStickerSet, UploadMedia
 from pyrogram.raw.functions.stickers import AddStickerToSet, CreateStickerSet
@@ -21,6 +23,12 @@ from caligo import command, module, util
 from caligo.core import database
 
 MAX_VIDEO_SIZE = 5 * 1024 * 1024
+
+
+def slugify(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"[^\w]+", "_", text)
+    return text.strip("_")
 
 
 class LengthMismatchError(Exception): ...
@@ -130,7 +138,7 @@ class Sticker(module.Module):
 
     @command.desc("Copy a sticker to your own sticker pack")
     @command.alias("stickercopy", "kang")
-    @command.usage("[emoji?] [vol?] or --emoji=😊 --vol=2", optional=True)
+    @command.usage("[emoji?] or --emoji=😊 --title='Custom Title'", optional=True)
     async def cmd_copysticker(self, ctx: command.Context) -> str:
         reply = ctx.msg.reply_to_message
         if not reply:
@@ -140,7 +148,7 @@ class Sticker(module.Module):
 
         await ctx.respond("__Preparing...__")
 
-        vol, emoji, animated, video, resize = 1, None, False, False, False
+        emoji, animated, video, resize = None, False, False, False
         file = (
             reply.sticker
             or reply.photo
@@ -168,15 +176,13 @@ class Sticker(module.Module):
         ):
             video, resize = True, True
 
-        # Process emoji and volume from flags
+        custom_title = ctx.flags.get("title")
+
         for key, val in ctx.flags.items():
             if isinstance(key, str) and util.text.has_emoji(key):
                 emoji = key
-            if isinstance(val, str):
-                if val.isdigit():
-                    vol = int(val)
-                elif util.text.has_emoji(val):
-                    emoji = val
+            if isinstance(val, str) and util.text.has_emoji(val):
+                emoji = val
 
         media_path = await reply.download()
         if not media_path:
@@ -192,10 +198,16 @@ class Sticker(module.Module):
 
         username = self.bot.user.username
         uid = self.bot.user.id
-        set_name = f"{username or uid}_kangPack_VOL{vol}"
-        set_title = (
-            f"@{username}'s Set VOL.{vol}" if username else f"{uid}'s Set VOL.{vol}"
+        user_prefix = username or str(uid)
+        slug_base = slugify(custom_title) if custom_title else "kangpack"
+
+        base_set_name = f"{user_prefix}_{slug_base}"
+        set_title = custom_title or (
+            f"@{username}'s Set" if username else f"{uid}'s Set"
         )
+
+        suffix = 1
+        set_name = f"{base_set_name}_{suffix}"
 
         if resize:
             try:
@@ -210,13 +222,14 @@ class Sticker(module.Module):
                 return "__Failed to resize media.__"
 
         if animated:
-            set_name += "_animation"
+            base_set_name += "_animation"
             set_title += " (Animation)"
         elif video:
-            set_name += "_video"
+            base_set_name += "_video"
             set_title += " (Video)"
 
         while True:
+            set_name = f"{base_set_name}_{suffix}"
             try:
                 sticker = await self.bot.client.invoke(
                     GetStickerSet(
@@ -229,22 +242,7 @@ class Sticker(module.Module):
             else:
                 limit = 50 if (animated or video) else 120
                 if sticker.set.count >= limit:
-                    vol += 1
-                    set_name = f"{username or uid}_kangPack_VOL{vol}"
-                    set_title = (
-                        f"@{username}'s Set VOL.{vol}"
-                        if username
-                        else f"{uid}'s Set VOL.{vol}"
-                    )
-                    if animated:
-                        set_name += "_animation"
-                        set_title += " (Animation)"
-                    elif video:
-                        set_name += "_video"
-                        set_title += " (Video)"
-                    await ctx.respond(
-                        f"Pack VOL {vol - 1} is full. Switching to VOL {vol}..."
-                    )
+                    suffix += 1
                     continue
                 break
 
@@ -266,5 +264,145 @@ class Sticker(module.Module):
 
         if success:
             await self.bot.log_stat("stickers_created")
-            return f"[Sticker copied]({result})."
-        return result
+            await ctx.respond(
+                f"[Sticker copied]({result}).",
+                link_preview_options=types.LinkPreviewOptions(is_disabled=True),
+            )
+            return
+        await ctx.respond(
+            result, link_preview_options=types.LinkPreviewOptions(is_disabled=True)
+        )
+
+    @command.desc("Copy a full sticker set into your own")
+    @command.usage(
+        "source_pack [--merge=target_pack] [--title new_title] or reply to a sticker"
+    )
+    @command.alias("kangpack", "copystickerpack")
+    async def cmd_copystickerset(self, ctx: command.Context) -> str:
+        flags = ctx.flags
+        reply = ctx.msg.reply_to_message
+
+        source_name = None
+
+        if reply and reply.sticker and reply.sticker.set_name:
+            source_name = reply.sticker.set_name
+        elif flags:
+            source_name = next(iter(flags), None)
+
+        if not source_name:
+            return (
+                "Usage: `kangpack <source_pack>` or reply to a sticker.\n"
+                "Optional: `--merge=target_pack` or `--title new_title`"
+            )
+
+        merge_target = flags.get("merge")
+        raw_title = flags.get("title")
+
+        await ctx.respond("Fetching source sticker set...")
+
+        try:
+            result = await self.bot.client.invoke(
+                GetStickerSet(
+                    stickerset=InputStickerSetShortName(short_name=source_name),
+                    hash=0,
+                )
+            )
+        except Exception as e:
+            return f"Failed to fetch source set: {e}"
+
+        hash_map = {}
+        for pack in result.packs:
+            for doc_id in pack.documents:
+                hash_map[doc_id] = pack.emoticon or "❓"
+
+        items = []
+        for doc in result.documents:
+            items.append(
+                InputStickerSetItem(
+                    document=InputDocument(
+                        id=doc.id,
+                        access_hash=doc.access_hash,
+                        file_reference=doc.file_reference,
+                    ),
+                    emoji=hash_map.get(doc.id, "❓"),
+                )
+            )
+
+        if not items:
+            return "Source sticker set has no stickers."
+
+        if merge_target:
+            await ctx.respond("Merging into existing sticker set...")
+
+            try:
+                existing = await self.bot.client.invoke(
+                    GetStickerSet(
+                        stickerset=InputStickerSetShortName(short_name=merge_target),
+                        hash=0,
+                    )
+                )
+            except Exception as e:
+                return f"Failed to get target pack for merging: {e}"
+
+            limit = 120
+            if existing.set.count + len(items) > limit:
+                return f"Target sticker set is too full to merge ({existing.set.count}/{limit})."
+
+            success = 0
+            for sticker in items:
+                try:
+                    await self.bot.client.invoke(
+                        AddStickerToSet(
+                            stickerset=InputStickerSetShortName(
+                                short_name=merge_target
+                            ),
+                            sticker=sticker,
+                        )
+                    )
+                    success += 1
+                except Exception:
+                    continue
+
+            return f"Merged {success}/{len(items)} stickers into [this pack](https://t.me/addstickers/{merge_target})."
+
+        # Generate name & title
+        username = self.bot.user.username or str(self.bot.user.id)
+        slug = slugify(raw_title) if raw_title else "pack"
+        suffix = 1
+
+        while True:
+            candidate = f"{username}_{slug}_v{suffix}"
+            try:
+                await self.bot.client.invoke(
+                    GetStickerSet(
+                        stickerset=InputStickerSetShortName(short_name=candidate),
+                        hash=0,
+                    )
+                )
+                suffix += 1
+            except StickersetInvalid:
+                target_name = candidate
+                break
+
+        title = (
+            f"{raw_title or 'Sticker Pack'} by @{username}"
+            if self.bot.user.username
+            else f"{raw_title or 'Sticker Pack'} by {self.bot.user.id}"
+        )
+
+        await ctx.respond("Creating new sticker set...")
+
+        try:
+            await self.bot.client.invoke(
+                CreateStickerSet(
+                    user_id=InputPeerSelf(),
+                    title=title[:64],  # limit title to 64 chars
+                    short_name=target_name,
+                    stickers=items[:120],
+                )
+            )
+        except Exception as e:
+            return f"Failed to create sticker set: {e}"
+        return ctx.respond(
+            f"Sticker set copied successfully.\n[Click to open](https://t.me/addstickers/{target_name})"
+        )
