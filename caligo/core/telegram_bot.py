@@ -331,7 +331,10 @@ class TelegramBot(CaligoBase):
                 return response
 
         # Default to disabling link previews in responses
-        if "disable_web_page_preview" not in kwargs:
+        if (
+            "disable_web_page_preview" not in kwargs
+            or kwargs["disable_web_page_preview"] is None
+        ):
             kwargs["disable_web_page_preview"] = True
 
         # Use selected response mode if not overridden by invoker
