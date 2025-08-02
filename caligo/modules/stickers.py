@@ -363,7 +363,9 @@ class Sticker(module.Module):
                 except Exception:
                     continue
 
-            return f"Merged {success}/{len(items)} stickers into [this pack](https://t.me/addstickers/{merge_target})."
+            return ctx.respond(
+                f"Merged {success}/{len(items)} stickers into [this pack](https://t.me/addstickers/{merge_target})."
+            )
 
         # Generate name & title
         username = self.bot.user.username or str(self.bot.user.id)
