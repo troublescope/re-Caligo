@@ -104,7 +104,7 @@ class Notes(module.Module):
             {"_id": 0, f"notes.{name}": {"$exists": True}}, {f"notes.{name}": 1}
         )
         if not data:
-            return
+            return await message.edit(f"Notes with {name} is  not found.")
         await message.delete(revoke=True)
 
         note = data["notes"][name]
@@ -153,7 +153,6 @@ class Notes(module.Module):
                 pass
             return
 
-        # fallback if button is invalid
         try:
             btn_markup = await util.run_sync(build_button, button) if button else None
         except ButtonUrlInvalid as e:
@@ -249,10 +248,14 @@ class Notes(module.Module):
     async def cmd_get(self, ctx: command.Context) -> None:
         if not ctx.input:
             return
-        if len(ctx.args) >= 2 and ctx.args[1].lower() == "noformat":
-            await self.get_note(ctx.msg, ctx.args[0], noformat=True)
-        else:
-            await self.get_note(ctx.msg, ctx.args[0])
+
+        note_name = ctx.flags.get("notename") or next(iter(ctx.flags), None)
+        noformat = ctx.flags.get("noformat", False)
+
+        if not note_name:
+            return await ctx.respond("Please specify a note name to retrieve.")
+
+        await self.get_note(ctx.msg, note_name, noformat=bool(noformat))
 
     @command.desc(
         "Save a new note by name. You can also reply to a message to save it."
@@ -261,10 +264,10 @@ class Notes(module.Module):
     @command.usage("save <notename> <note text> or reply to media/text")
     async def cmd_save(self, ctx: command.Context) -> None:
         if (
-            len(ctx.args) < 2
-            and not ctx.msg.reply_to_message
+            not ctx.msg.reply_to_message
+            and len(ctx.flags) < 2
             or ctx.msg.reply_to_message
-            and len(ctx.args) < 1
+            and len(ctx.flags) < 1
         ):
             text = (
                 "Invalid arguments to save a note.\n\n"
@@ -279,7 +282,11 @@ class Notes(module.Module):
             await ctx.msg.edit(text, parse_mode=ParseMode.HTML)
             return
 
-        trigger = ctx.args[0]
+        trigger = ctx.flags.get("notename") or next(iter(ctx.flags), None)
+        if not trigger:
+            await ctx.respond("You must specify a note name.")
+            return
+
         if trigger.startswith("#") or "." in trigger or "$" in trigger:
             await ctx.respond("Trigger cannot contain '#', '.', or '$' characters.")
             return
