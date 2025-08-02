@@ -6,9 +6,7 @@ from pyrogram import filters
 from pyrogram.enums.parse_mode import ParseMode
 from pyrogram.errors import ButtonUrlInvalid, MediaEmpty, MessageEmpty
 from pyrogram.types import (
-    InlineKeyboardButton,
     InlineQuery,
-    InlineQueryResult,
     InlineQueryResultArticle,
     InputTextMessageContent,
     Message,
@@ -16,7 +14,13 @@ from pyrogram.types import (
 
 from caligo import command, listener, module, util
 from caligo.core import database
-from caligo.util.tg import Types, build_button, get_message_info, revert_button
+from caligo.util.tg import (
+    Types,
+    build_button,
+    generate_inline_result,
+    get_message_info,
+    revert_button,
+)
 
 
 class Notes(module.Module):
@@ -45,28 +49,6 @@ class Notes(module.Module):
             Types.VIDEO_NOTE.value: self.bot.client.send_video_note,
             Types.ANIMATION.value: self.bot.client.send_animation,
         }
-
-    async def _generate_inline_result(
-        self, msg: Message, btn: list[InlineKeyboardButton]
-    ) -> InlineQueryResult:
-        parameters: dict[str, Any] = {"reply_markup": btn}
-
-        if not msg.media:
-            raise TypeError("Must be a Message Media Object")
-
-        media_str = msg.media.value
-        media_obj = getattr(msg, media_str, None)
-
-        parameters.update(
-            {f"{media_str}_file_id": media_obj.file_id, "caption": msg.content.markdown}
-        )
-
-        if media_str not in {"audio", "sticker"}:
-            parameters["title"] = "Dynamic InlineResultCachedMedia"
-
-        return getattr(types, f"InlineQueryResultCached{media_str.title()}", None)(
-            **parameters
-        )
 
     @listener.filters(filters.regex(r"^notes\([a-f0-9]{32}\)$"))
     async def on_inline_query(self, event: InlineQuery) -> None:
@@ -219,7 +201,7 @@ class Notes(module.Module):
         _msgbot = await self.bot.client_helper.get_messages(self.log_chat, _tmp_msg.id)
 
         try:
-            inline = await self._generate_inline_result(_msgbot, btn_markup)
+            inline = await generate_inline_result(_msgbot, btn_markup)
             key = f"notes({uuid.uuid4().hex})"
             self.state[key] = [inline]
             results = await self.bot.client.get_inline_bot_results(
@@ -247,7 +229,7 @@ class Notes(module.Module):
     @command.usage("get <notename>")
     async def cmd_get(self, ctx: command.Context) -> None:
         if not ctx.input:
-            return
+            return "__What should i get for you?__"
 
         note_name = ctx.flags.get("notename") or next(iter(ctx.flags), None)
         noformat = ctx.flags.get("noformat", False)

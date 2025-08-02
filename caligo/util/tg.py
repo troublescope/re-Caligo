@@ -2,7 +2,7 @@ import io
 import re
 import uuid
 from enum import IntEnum, unique
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import bprint
 import pyrogram
@@ -10,6 +10,14 @@ from pyrogram.types import (
     CopyTextButton,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    InlineQueryResult,
+    InlineQueryResultCachedAnimation,
+    InlineQueryResultCachedAudio,
+    InlineQueryResultCachedDocument,
+    InlineQueryResultCachedPhoto,
+    InlineQueryResultCachedSticker,
+    InlineQueryResultCachedVideo,
+    InlineQueryResultCachedVoice,
     Message,
 )
 
@@ -44,6 +52,48 @@ class Types(IntEnum):
     VOICE = 7
     VIDEO_NOTE = 8
     ANIMATION = 9
+
+
+# Static lookup for media type → InlineResult class
+_INLINE_CLASS_MAP: Dict[str, type] = {
+    "photo": InlineQueryResultCachedPhoto,
+    "video": InlineQueryResultCachedVideo,
+    "document": InlineQueryResultCachedDocument,
+    "voice": InlineQueryResultCachedVoice,
+    "audio": InlineQueryResultCachedAudio,
+    "sticker": InlineQueryResultCachedSticker,
+    "animation": InlineQueryResultCachedAnimation,
+}
+
+
+async def generate_inline_result(
+    msg: Message,
+    btn: List[InlineKeyboardButton],
+) -> InlineQueryResult:
+    if not msg.media:
+        raise TypeError("Must be a Message Media Object")
+
+    media_str = msg.media.value
+    media_obj = getattr(msg, media_str, None)
+    if not media_obj or not hasattr(media_obj, "file_id"):
+        raise TypeError(f"Message does not contain a valid {media_str} media")
+
+    cls = _INLINE_CLASS_MAP.get(media_str)
+    if not cls:
+        raise ValueError(f"Unsupported media type: {media_str}")
+
+    return cls(
+        **{
+            f"{media_str}_file_id": media_obj.file_id,
+            "caption": msg.content.markdown if msg.content else "",
+            "reply_markup": btn,
+            **(
+                {"title": "Dynamic InlineResultCachedMedia"}
+                if media_str not in {"audio", "sticker"}
+                else {}
+            ),
+        }
+    )
 
 
 def mention_user(user: pyrogram.types.User) -> str:
