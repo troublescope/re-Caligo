@@ -20,5 +20,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: caligo
       MONGO_INITDB_ROOT_PASSWORD: mypasswd
 
+    command: --quiet
+
 volumes:
   mongo_caligo:
