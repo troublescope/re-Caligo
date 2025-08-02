@@ -1,9 +1,10 @@
 import asyncio
+import random
 from datetime import datetime, timedelta
 from typing import Any, ClassVar, Literal, Optional, Set, Tuple
 
 from aiopath import AsyncPath
-from pyrogram.types import Message
+from pyrogram import raw
 
 from caligo import command, module, util
 
@@ -62,12 +63,12 @@ class Network(module.Module):
 
     @command.desc("Pong")
     async def cmd_ping(self, ctx: command.Context):
-        start = datetime.now()
-        await ctx.respond("Calculating response time...")
-        end = datetime.now()
-        latency = (end - start).microseconds / 1000
 
-        return f"Request response time: **{latency} ms**"
+        ping_id = random.getrandbits(64)
+        start = datetime.now()
+        await self.bot.client.invoke(raw.functions.Ping(ping_id=ping_id))
+        latency = (datetime.now() - start).microseconds / 1000
+        return f"Request response time: **{latency:.2f} ms**"
 
     @command.desc("Abort transmission of upload or download")
     @command.usage("[message progress to abort]", reply=True)
