@@ -1,5 +1,4 @@
 import asyncio
-import random
 from datetime import datetime, timedelta
 from typing import Any, ClassVar, Literal, Optional, Set, Tuple
 
@@ -63,10 +62,8 @@ class Network(module.Module):
 
     @command.desc("Pong")
     async def cmd_ping(self, ctx: command.Context):
-
-        ping_id = random.getrandbits(64)
         start = datetime.now()
-        await self.bot.client.invoke(raw.functions.Ping(ping_id=ping_id))
+        await self.bot.client.invoke(raw.functions.Ping(ping_id=0))
         latency = (datetime.now() - start).microseconds / 1000
         return f"Request response time: **{latency:.2f} ms**"
 
