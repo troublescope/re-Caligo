@@ -14,6 +14,12 @@ session_string = "" # You can pass this, or just leave it blank.
 # Mongodb url from https://cloud.mongodb.com/
 db_uri = "mongodb://srv+"
 
+# Deprecated soon (For now this mandatory)
+git_url = "https://github.com/troublescope/re-Caligo.git"
+
+# Add your logchat here (This will deprecated soon)
+log_chat = -100
+
 # ---- OPTIONAL ---- #
 # Bot command prefix
 prefix = "."
