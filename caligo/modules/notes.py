@@ -232,9 +232,13 @@ class Notes(module.Module):
             return "__What should i get for you?__"
 
         note_name = ctx.flags.get("notename") or next(iter(ctx.flags), None)
-        noformat = ctx.flags.get("noformat", False)
+        noformat = (
+            ctx.flags.get("noformat", False)
+            if "noformat" in ctx.flags
+            else "noformat" in ctx.input.split()
+        )
 
-        if not note_name:
+        if not note_name or note_name == "noformat":
             return await ctx.respond("Please specify a note name to retrieve.")
 
         await self.get_note(ctx.msg, note_name, noformat=bool(noformat))
