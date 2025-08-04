@@ -125,12 +125,14 @@ class Notes(module.Module):
                         reply_markup=keyb,
                         parse_mode=parse_mode,
                     )
+
             except MediaEmpty:
                 await self.bot.client.send_message(
                     chat.id,
                     "Your note has expired...",
                     message_thread_id=message.message_thread_id,
                 )
+
             except MessageEmpty:
                 pass
             return

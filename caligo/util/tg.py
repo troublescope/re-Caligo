@@ -227,20 +227,32 @@ def get_message_info(msg: Message) -> Tuple[str, Types, Optional[str], Button]:
     text = ""
     buttons = []
 
+    def extract_markup_buttons(markup) -> list:
+        """Extract buttons from InlineKeyboardMarkup into flat Button format."""
+        result = []
+        if markup and hasattr(markup, "inline_keyboard"):
+            for row in markup.inline_keyboard:
+                for btn in row:
+                    if isinstance(btn, InlineKeyboardButton):
+                        if btn.url:
+                            result.append((btn.text, "url", btn.url, False))
+                        elif isinstance(btn.copy_text, CopyTextButton):
+                            result.append((btn.text, "copy", btn.copy_text.text, False))
+        return result
+
     reply_msg = msg.reply_to_message
 
     if reply_msg:
         text = reply_msg.text or reply_msg.caption
-        added_text = None
+
+        # Try parse from replied message
         if text:
             text, buttons = parse_button(text.markdown)
         else:
-            # added_text are from user input
-            added_text, buttons = parse_button(msg.text.markdown.split(" ", 2)[-1])
+            # Fallback to parsing user input if no text in replied message
+            text, buttons = parse_button(msg.text.markdown.split(" ", 2)[-1])
 
-        if not text and added_text is not None:
-            text = added_text
-
+        # Detect message type from media
         if reply_msg.text:
             types = Types.BUTTON_TEXT if buttons else Types.TEXT
         elif reply_msg.sticker:
@@ -261,14 +273,24 @@ def get_message_info(msg: Message) -> Tuple[str, Types, Optional[str], Button]:
             content, types = reply_msg.animation.file_id, Types.ANIMATION
         else:
             raise ValueError("Can't get message information")
+
+        # Also extract buttons from reply_to_message.reply_markup
+        buttons += extract_markup_buttons(reply_msg.reply_markup)
+
     else:
-        raw_text = msg.text.markdown.split(" ", 2)
-        if len(raw_text) == 2:  # content were on the next line
-            raw_text = raw_text[1]
-            text, buttons = parse_button(raw_text.split("\n", 1)[1])
-        else:
-            text, buttons = parse_button(raw_text[2])
-        types = Types.BUTTON_TEXT if buttons else Types.TEXT
+        # Try parse from message text directly
+        try:
+            raw_text = msg.content.markdown
+            text, buttons = parse_button(raw_text)
+        except Exception:
+            text, buttons = "", []
+        types = Types.TEXT
+
+    # Extract buttons from msg.reply_markup too
+    buttons += extract_markup_buttons(msg.reply_markup)
+
+    if buttons and types == Types.TEXT:
+        types = Types.BUTTON_TEXT
 
     return text, types, content, buttons
 
