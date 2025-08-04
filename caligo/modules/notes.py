@@ -30,11 +30,9 @@ class Notes(module.Module):
     db: database.AsyncCollection
     SEND: MutableMapping[int, Callable[..., Coroutine[Any, Any, Optional[Message]]]]
     state: dict[str, list]
-    log_chat: int
 
     async def on_load(self):
         self.db = self.bot.db.get_collection(self.name.upper())
-        self.log_chat = self.bot.config["bot"]["log_chat"]
 
         self.state = {}
         self.SEND = {
@@ -58,13 +56,8 @@ class Notes(module.Module):
             return
         try:
             await event.answer(results=results, cache_time=0)
-        except Exception as e:
-            await self.bot.client.send_message(
-                self.log_chat,
-                f"<b>Failed to send inline note result</b>\n"
-                f"<b>Reason:</b> <code>{e}</code>",
-                parse_mode=ParseMode.HTML,
-            )
+        except Exception:
+            pass
         finally:
             await asyncio.to_thread(self.state.pop, event.query, None)
 
@@ -86,7 +79,7 @@ class Notes(module.Module):
             {"_id": 0, f"notes.{name}": {"$exists": True}}, {f"notes.{name}": 1}
         )
         if not data:
-            return await message.edit(f"Notes with {name} is  not found.")
+            return await message.edit(f"Notes with {name} is not found.")
         await message.delete(revoke=True)
 
         note = data["notes"][name]
@@ -94,6 +87,15 @@ class Notes(module.Module):
         types = note["type"]
         text = note["text"] or name
         content = note.get("content")
+
+        # If buttons exist but log_chat is not set
+        if button and not self.bot.log_chat:
+            return await self.bot.client.send_message(
+                message.chat.id,
+                "Log chat is not set. Use <code>.setlogchat here</code> in a group or channel.",
+                parse_mode=ParseMode.HTML,
+                reply_to_message_id=message.id,
+            )
 
         if noformat:
             parse_mode = ParseMode.DISABLED
@@ -125,14 +127,12 @@ class Notes(module.Module):
                         reply_markup=keyb,
                         parse_mode=parse_mode,
                     )
-
             except MediaEmpty:
                 await self.bot.client.send_message(
                     chat.id,
                     "Your note has expired...",
                     message_thread_id=message.message_thread_id,
                 )
-
             except MessageEmpty:
                 pass
             return
@@ -141,7 +141,7 @@ class Notes(module.Module):
             btn_markup = await util.run_sync(build_button, button) if button else None
         except ButtonUrlInvalid as e:
             await self.bot.client.send_message(
-                self.log_chat,
+                self.bot.log_chat,
                 f"⚠️ <b>Invalid button detected for note:</b> <code>{name}</code>\n"
                 f"<b>Error:</b> <code>{e}</code>",
                 parse_mode=ParseMode.HTML,
@@ -175,7 +175,7 @@ class Notes(module.Module):
                     )
                 except Exception as e:
                     await self.bot.client.send_message(
-                        self.log_chat,
+                        self.bot.log_chat,
                         f"<b>Failed to send inline text note:</b> <code>{name}</code>\n<code>{e}</code>",
                         parse_mode=ParseMode.HTML,
                     )
@@ -198,9 +198,11 @@ class Notes(module.Module):
             return
 
         _tmp_msg = await self.bot.client.send_cached_media(
-            self.log_chat, content, caption=text
+            self.bot.log_chat, content, caption=text
         )
-        _msgbot = await self.bot.client_helper.get_messages(self.log_chat, _tmp_msg.id)
+        _msgbot = await self.bot.client_helper.get_messages(
+            self.bot.log_chat, _tmp_msg.id
+        )
 
         try:
             inline = await generate_inline_result(_msgbot, btn_markup)
@@ -209,7 +211,6 @@ class Notes(module.Module):
             results = await self.bot.client.get_inline_bot_results(
                 self.bot.client_helper.me.username, key
             )
-
             await self.bot.client.send_inline_bot_result(
                 chat_id=chat.id,
                 query_id=results.query_id,
@@ -231,7 +232,7 @@ class Notes(module.Module):
     @command.usage("get <notename>")
     async def cmd_get(self, ctx: command.Context) -> None:
         if not ctx.input:
-            return "__What should i get for you?__"
+            return "__What should I get for you?__"
 
         note_name = ctx.flags.get("notename") or next(iter(ctx.flags), None)
         noformat = (

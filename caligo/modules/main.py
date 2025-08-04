@@ -273,3 +273,28 @@ class Main(module.Module):
             {"_id": 0}, {"$set": {"prefix": new_prefix}}, upsert=True
         )
         return f"<b>Prefix set to:</b> <code>{self.bot.prefix}</code>"
+
+    @command.desc("Get or change log chat ID")
+    @command.alias("setlogchat", "getlogchat")
+    @command.usage("[chat_id or 'here']", optional=True)
+    async def cmd_logchat(self, ctx: command.Context) -> str:
+        value = ctx.input.strip().lower() or ctx.flags.get("log_chat")
+
+        if not value:
+            return f"<b>Log Chat:</b> <code>{self.bot.log_chat}</code>"
+
+        if value in {"here", "set"}:
+            if ctx.chat.type == "private":
+                return "<b>Error:</b> You can only set log chat to a group or channel."
+            log_chat_id = ctx.chat.id
+        else:
+            try:
+                log_chat_id = int(value)
+            except ValueError:
+                return "<b>Error:</b> log_chat must be a valid integer or use 'here'."
+
+        self.bot.log_chat = log_chat_id
+        await self.db.update_one(
+            {"_id": 0}, {"$set": {"log_chat": log_chat_id}}, upsert=True
+        )
+        return f"<b>Log Chat set to:</b> <code>{self.bot.log_chat}</code>"
