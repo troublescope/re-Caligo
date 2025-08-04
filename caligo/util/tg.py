@@ -232,12 +232,14 @@ def get_message_info(msg: Message) -> Tuple[str, Types, Optional[str], Button]:
         result = []
         if markup and hasattr(markup, "inline_keyboard"):
             for row in markup.inline_keyboard:
-                for btn in row:
+                for idx, btn in enumerate(row):
                     if isinstance(btn, InlineKeyboardButton):
                         if btn.url:
-                            result.append((btn.text, "url", btn.url, False))
+                            result.append((btn.text, "url", btn.url, bool(idx)))
                         elif isinstance(btn.copy_text, CopyTextButton):
-                            result.append((btn.text, "copy", btn.copy_text.text, False))
+                            result.append(
+                                (btn.text, "copy", btn.copy_text.text, bool(idx))
+                            )
         return result
 
     reply_msg = msg.reply_to_message
