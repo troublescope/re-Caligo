@@ -331,3 +331,14 @@ class Notes(module.Module):
 
         await self.db.update_one({"_id": 0}, {"$unset": {f"notes.{name}": ""}})
         await ctx.respond(f"Note **{name}** has been deleted.")
+
+    @command.desc("Delete all saved notes.")
+    @command.alias("clearnotes")
+    async def cmd_clearallnotes(self, ctx: command.Context) -> None:
+        data = await self.db.find_one({"_id": 0})
+        if not data or "notes" not in data or not data["notes"]:
+            await ctx.respond("There are no notes to delete.")
+            return
+
+        await self.db.update_one({"_id": 0}, {"$unset": {"notes": ""}})
+        await ctx.respond("All notes have been deleted.")
