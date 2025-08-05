@@ -17,9 +17,6 @@ db_uri = "mongodb://srv+"
 # Deprecated soon (For now this mandatory)
 git_url = "https://github.com/troublescope/re-Caligo.git"
 
-# Add your logchat here (This will deprecated soon)
-log_chat = -100
-
 # ---- OPTIONAL ---- #
 # Bot command prefix
 prefix = "."
