@@ -78,13 +78,12 @@ class TelegramBot(CaligoBase):
 
         self.prefix = self.config["bot"]["prefix"]
         # Override default prefix if found any saved in database
-        data = await self.db["MAIN"].find_one({"_id": 0}, {"prefix": 1})
-        if data:
-            if data.get("prefix"):
-                self.prefix = data["prefix"]
-
-            # get data log_chat from db
-            self.log_chat = data.get("log_chat", 0)
+        data = (
+            await self.db["MAIN"].find_one({"_id": 0}, {"prefix": 1, "log_chat": 1})
+            or {}
+        )
+        self.prefix = data.get("prefix", self.config["bot"]["prefix"])
+        self.log_chat = data.get("log_chat", 0)
 
         # Initialize bot client helper if has token
         bot_token = self.config["telegram"]["helper"].get("token")
