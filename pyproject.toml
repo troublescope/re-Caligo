@@ -39,7 +39,7 @@ aiohttp = "^3.12.15"
 aiopath = "^0.7.7"
 aiorun = {version = "^2025.1.1", python = ">=3.9,<4.0"}
 beauty-print = "^0.6.1"
-certifi = {version = "^2023.7.22", platform = "windows"}
+certifi = {version = "^2025.8.3", platform = "windows"}
 colorlog = "^6.7.0"
 emoji = "^2.14.1"
 gitpython = "^3.1.45"
