@@ -270,6 +270,5 @@ Out:
 <b><a href={paste_url}>⏱ {el_str}</a></b>"""
 
         await ctx.respond(
-            respond_text,
-            parse_mode=pyrogram.enums.parse_mode.ParseMode.HTML,
+            respond_text, parse_mode=pyrogram.enums.parse_mode.ParseMode.HTML
         )

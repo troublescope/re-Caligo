@@ -303,8 +303,7 @@ class Sticker(module.Module):
         try:
             result = await self.bot.client.invoke(
                 GetStickerSet(
-                    stickerset=InputStickerSetShortName(short_name=source_name),
-                    hash=0,
+                    stickerset=InputStickerSetShortName(short_name=source_name), hash=0
                 )
             )
         except Exception as e:

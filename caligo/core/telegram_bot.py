@@ -104,8 +104,7 @@ class TelegramBot(CaligoBase):
         # Command handler
         self.client.add_handler(
             MessageHandler(
-                self.on_command,
-                filters=(self.command_predicate() & filt.me),
+                self.on_command, filters=(self.command_predicate() & filt.me)
             ),
             0,
         )

@@ -124,12 +124,7 @@ class Network(module.Module):
                 self.bot.client.download_media(
                     msg,
                     progress=prog_func,
-                    progress_args=(
-                        start_time,
-                        "download",
-                        ctx,
-                        name,
-                    ),
+                    progress_args=(start_time, "download", ctx, name),
                 )
             )
             self.tasks.add((ctx.msg.id, task))
@@ -183,12 +178,7 @@ class Network(module.Module):
                 message_thread_id=ctx.msg.message_thread_id,
                 force_document=True,
                 progress=prog_func,
-                progress_args=(
-                    start_time,
-                    "upload",
-                    ctx,
-                    file_path.name,
-                ),
+                progress_args=(start_time, "upload", ctx, file_path.name),
             )
         )
         self.tasks.add((ctx.msg.id, task))

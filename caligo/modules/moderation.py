@@ -68,16 +68,13 @@ class Moderation(module.Module):
             messages_id.append(message_id)
             if len(messages_id) == 100:
                 purged += await ctx.bot.client.delete_messages(
-                    chat_id=ctx.msg.chat.id,
-                    message_ids=messages_id,
+                    chat_id=ctx.msg.chat.id, message_ids=messages_id
                 )
                 messages_id = []
 
         if messages_id:
             purged += await ctx.bot.client.delete_messages(
-                chat_id=ctx.msg.chat.id,
-                message_ids=messages_id,
-                revoke=True,
+                chat_id=ctx.msg.chat.id, message_ids=messages_id, revoke=True
             )
 
         time_end = datetime.now()
