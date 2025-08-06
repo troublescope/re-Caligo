@@ -1,3 +1,4 @@
+import asyncio
 import random
 from datetime import datetime
 
@@ -15,11 +16,13 @@ class AFK(module.Module):
         self._is_afk = await self.get("is_afk") or False
         self._start_time = await self.get("start") or 0
         self._reason = await self.get("reason") or ""
-
-        self._afk_cache = {}  # Rate-limiting
-        self._afk_links = []  # List of {link, user, name}
+        self._afk_cache = {}
+        self._afk_links = []
         self._afk_limit = 3
         self._afk_cooldown = 60
+        self._afk_delete_after = await self.get("afk_delete") or 60
+        self._afk_ignore_chats = await self.get("ignore_chats") or []
+        self._afk_delete_tasks = {}
 
     async def get(self, key: str):
         doc = await self.db.find_one({"_id": 0})
@@ -28,12 +31,25 @@ class AFK(module.Module):
     async def put(self, key: str, value):
         await self.db.update_one({"_id": 0}, {"$set": {key: value}}, upsert=True)
 
+    async def _schedule_delete(self, msg: Message, delay: int):
+        try:
+            await asyncio.sleep(delay)
+            await msg.delete(revoke=True)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+
     @listener.priority(99)
     @listener.filters(
         (filters.mentioned | filters.private) & ~filters.me & ~filters.bot
     )
     async def on_message(self, msg: Message):
         if not self._is_afk:
+            return
+        if msg.from_user and msg.from_user.id == self.bot.uid:
+            return
+        if msg.chat.id in self._afk_ignore_chats:
             return
 
         user_id = msg.from_user.id if msg.from_user else None
@@ -101,9 +117,21 @@ class AFK(module.Module):
         if reason:
             text += f" — <i>{reason}</i>"
         elif quote_block:
-            text += f"{quote_block}"
+            text += quote_block
 
-        await msg.reply(text)
+        try:
+            r = await msg.reply(text, quote=True)
+            if self._afk_delete_after > 0:
+                old_task = self._afk_delete_tasks.pop(r.id, None)
+                if old_task:
+                    old_task.cancel()
+
+                task = asyncio.create_task(
+                    self._schedule_delete(r, self._afk_delete_after)
+                )
+                self._afk_delete_tasks[r.id] = task
+        except Exception:
+            pass
 
     @command.desc("Toggle AFK mode with optional reason")
     @command.usage("[reason?]", optional=True)
@@ -121,10 +149,9 @@ class AFK(module.Module):
                 recent = []
                 for m in self._afk_links[-10:]:
                     link = m["link"]
-                    if m.get("user"):
-                        label = f"@{m['user']}"
-                    else:
-                        label = m.get("name", "someone")
+                    label = (
+                        f"@{m['user']}" if m.get("user") else m.get("name", "someone")
+                    )
                     recent.append(f'• <a href="{link}">{label}</a>')
                 text += f"\n\nMentions while AFK:\n" + "\n".join(recent)
 
@@ -151,3 +178,58 @@ class AFK(module.Module):
         self._afk_links.clear()
 
         return f"<blockquote><b>You're now AFK.</b>{f' Reason: <i>{reason_input}</i>' if reason_input else ''}</blockquote>"
+
+    @command.desc("Set auto-delete time for AFK replies (0 to disable)")
+    @command.usage("[seconds]", optional=True)
+    async def cmd_afkdel(self, ctx: command.Context):
+        arg = ctx.input.strip()
+        if not arg:
+            return f"AFK reply delete time is set to <b>{self._afk_delete_after}</b> seconds."
+
+        try:
+            seconds = int(arg)
+            if seconds < 0 or seconds > 3600:
+                return "Please provide a time between 0 and 3600 seconds."
+        except ValueError:
+            return "Invalid number."
+
+        self._afk_delete_after = seconds
+        await self.put("afk_delete", seconds)
+
+        if seconds == 0:
+            return "AFK replies will no longer be auto-deleted."
+        return f"AFK replies will auto-delete after <b>{seconds}</b> seconds."
+
+    @command.desc("Manage AFK blacklist (ignore specific chats)")
+    @command.usage("[chat_id|list|clear]", optional=True)
+    async def cmd_afkbl(self, ctx: command.Context):
+        arg = ctx.input.strip()
+
+        if arg.lower() == "list":
+            if not self._afk_ignore_chats:
+                return "AFK ignore list is empty."
+            lines = [f"• <code>{cid}</code>" for cid in self._afk_ignore_chats]
+            return "<b>AFK ignore list:</b>\n" + "\n".join(lines)
+
+        if arg.lower() == "clear":
+            count = len(self._afk_ignore_chats)
+            self._afk_ignore_chats.clear()
+            await self.put("ignore_chats", [])
+            return f"Cleared <b>{count}</b> chats from AFK ignore list."
+
+        try:
+            chat_id = int(arg) if arg else ctx.msg.chat.id
+        except ValueError:
+            return "Invalid chat ID."
+
+        self._afk_ignore_chats = [int(c) for c in self._afk_ignore_chats]
+
+        if chat_id in self._afk_ignore_chats:
+            self._afk_ignore_chats.remove(chat_id)
+            status = "removed from"
+        else:
+            self._afk_ignore_chats.append(chat_id)
+            status = "added to"
+
+        await self.put("ignore_chats", self._afk_ignore_chats)
+        return f"<b>{chat_id}</b> {status} AFK ignore list."
