@@ -389,14 +389,14 @@ class Notes(module.Module):
     async def cmd_get(self, ctx: command.Context) -> None:
         """Get a note command."""
         if not ctx.input:
-            return await ctx.respond("__What should I get for you?__")
+            return "__What should I get for you?__"
 
         args = ctx.input.split()
         note_name = args[0] if args else None
         noformat = "noformat" in args
 
         if not note_name or note_name == "noformat":
-            return await ctx.respond("Please specify a note name to retrieve.")
+            return "Please specify a note name to retrieve."
 
         await self._get_note_safe(ctx.msg, note_name, noformat=noformat)
 
@@ -433,7 +433,9 @@ class Notes(module.Module):
         self._validate_note_name(trigger)
 
         # Get note content
-        text, note_type, content, buttons = await self._get_message_info_async(ctx.msg)
+        text, note_type, content, buttons = await util.run_sync(
+            get_message_info, ctx.msg
+        )
 
         return trigger, {
             "text": text,
@@ -441,10 +443,6 @@ class Notes(module.Module):
             "content": content,
             "button": buttons,
         }
-
-    async def _get_message_info_async(self, message: Message) -> tuple:
-        """Get message info asynchronously."""
-        return await util.run_sync(get_message_info, message)
 
     def _get_save_usage_text(self) -> str:
         """Get usage text for save command."""
@@ -473,7 +471,8 @@ class Notes(module.Module):
         try:
             notes = await self._get_all_notes()
             if not notes:
-                return await ctx.respond("There are no saved notes.")
+                await ctx.respond("There are no saved notes.")
+                return
 
             note_list = sorted(notes.keys())
             response = "**Saved Notes**:\n\n"
@@ -494,7 +493,7 @@ class Notes(module.Module):
     async def cmd_delnote(self, ctx: command.Context) -> None:
         """Delete note command."""
         if not ctx.input:
-            return await ctx.respond("Please provide the note name to delete.")
+            return "Please provide the note name to delete."
 
         name = ctx.input.strip()
 
@@ -525,7 +524,7 @@ class Notes(module.Module):
         try:
             notes = await self._get_all_notes()
             if not notes:
-                return await ctx.respond("There are no notes to delete.")
+                return "There are no notes to delete."
 
             await self.db.update_one({"_id": 0}, {"$unset": {"notes": ""}})
             await ctx.respond("All notes have been deleted.")
