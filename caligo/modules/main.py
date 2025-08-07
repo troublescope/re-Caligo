@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from collections import defaultdict
 from typing import ClassVar, List, MutableMapping
@@ -15,8 +16,30 @@ class Main(module.Module):
 
     async def on_load(self) -> None:
         self.db = self.bot.db[self.name.upper()]
-
         self.repo = self.bot.config["bot"]["git_url"]
+
+        self._module_command_map: dict[str, dict[str, str]] = defaultdict(dict)
+        for _, cmd in self.bot.commands.items():
+            mod_name = cmd.module.name
+            desc = cmd.desc or "<i>No description provided.</i>"
+            aliases = f' (aliases: {", ".join(cmd.aliases)})' if cmd.aliases else ""
+            self._module_command_map[mod_name][cmd.name] = desc + aliases
+
+        self._menu_buttons: list[list[types.InlineKeyboardButton]] = self.build_button()
+
+    def build_button(self) -> List[List[types.InlineKeyboardButton]]:
+        modules = sorted(self._module_command_map.keys())
+        button_row: List[types.InlineKeyboardButton] = [
+            types.InlineKeyboardButton(mod, callback_data=f"menu({mod})")
+            for mod in modules
+        ]
+        buttons = [
+            button_row[i * 3 : (i + 1) * 3] for i in range((len(button_row) + 2) // 3)
+        ]
+        buttons.append(
+            [types.InlineKeyboardButton("✗ Close", callback_data="menu(Close)")]
+        )
+        return buttons
 
     async def extract_inline_id(self, inline_id: str) -> tuple[int, int]:
         unpacked = await util.run_sync(unpack_inline_message_id, inline_id)
@@ -29,30 +52,11 @@ class Main(module.Module):
             unpacked.id,
         )
 
-    def build_button(self) -> List[List[types.InlineKeyboardButton]]:
-        modules = list(self.bot.modules.keys())
-        button: List[types.InlineKeyboardButton] = []
-        for mod in modules:
-            button.append(
-                types.InlineKeyboardButton(mod, callback_data=f"menu({mod})".encode())
-            )
-        buttons = [
-            button[i * 3 : (i + 1) * 3] for i in range((len(button) + 3 - 1) // 3)
-        ]
-        buttons.append(
-            [
-                types.InlineKeyboardButton(
-                    "✗ Close", callback_data="menu(Close)".encode()
-                )
-            ]
-        )
-
-        return buttons
-
     async def on_inline_query(self, query: types.InlineQuery) -> None:
         if query.query:
             return
-        answer = [
+
+        results = [
             types.InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
                 title="About Caligo",
@@ -60,7 +64,6 @@ class Main(module.Module):
                     "<i>Caligo Simple. Powerful. Yours...</i>"
                 ),
                 description="Caligo Simple. Powerful. Yours..",
-                thumb_url=None,
                 reply_markup=types.InlineKeyboardMarkup(
                     [
                         [
@@ -68,17 +71,16 @@ class Main(module.Module):
                                 "⚡️ Owner", user_id=self.bot.uid
                             ),
                             types.InlineKeyboardButton(
-                                "📖️ Discussion ",
-                                url="t.me/deltaDiscuss",
+                                "📖️ Discussion", url="t.me/deltaDiscuss"
                             ),
                         ]
                     ]
                 ),
             )
         ]
-        if query.from_user and (query.from_user.id == self.bot.uid):
-            button = await util.run_sync(self.build_button)
-            answer.append(
+
+        if query.from_user and query.from_user.id == self.bot.uid:
+            results.append(
                 types.InlineQueryResultArticle(
                     id=str(uuid.uuid4()),
                     title="Menu",
@@ -86,12 +88,11 @@ class Main(module.Module):
                         "<b>Caligo Menu Helper</b>"
                     ),
                     description="Menu Helper.",
-                    thumb_url=None,
-                    reply_markup=types.InlineKeyboardMarkup(button),
+                    reply_markup=types.InlineKeyboardMarkup(self._menu_buttons),
                 )
             )
 
-            return await query.answer(results=answer, cache_time=5)
+        await query.answer(results=results, cache_time=5)
 
     @listener.filters(filters.regex(r"menu\((\w+)\)$"))
     async def on_callback_query(self, query: types.CallbackQuery) -> None:
@@ -100,63 +101,39 @@ class Main(module.Module):
             return
 
         mod = query.matches[0].group(1)
+
         if mod == "Back":
-            button = await util.run_sync(self.build_button)
-            try:
-                await query.edit_message_text(
-                    "<b>Caligo Menu Helper</b>",
-                    reply_markup=types.InlineKeyboardMarkup(button),
-                )
-            except errors.FloodWait as e:
-                await asyncio.sleep(e.x)
+            await query.edit_message_text(
+                "<b>Caligo Menu Helper</b>",
+                reply_markup=types.InlineKeyboardMarkup(self._menu_buttons),
+            )
             return
 
         if mod == "Close":
-            button = await util.run_sync(self.build_button)
-            chat_id, msg_id = await self.extract_inline_id(query.inline_message_id)
             try:
+                chat_id, msg_id = await self.extract_inline_id(query.inline_message_id)
                 await self.bot.client.delete_messages(chat_id, msg_id)
             except errors.ChatIdInvalid:
                 await query.answer("😿️ Couldn't close message")
                 await query.edit_message_text(
                     "<b>Caligo Menu Helper</b>",
-                    reply_markup=types.InlineKeyboardMarkup(button[:-1]),
+                    reply_markup=types.InlineKeyboardMarkup(self._menu_buttons[:-1]),
                 )
-
             return
 
-        modules: MutableMapping[str, MutableMapping[str, str]] = defaultdict(dict)
-        for _, cmd in self.bot.commands.items():
-            if cmd.module.name != mod:
-                continue
-
-            desc = cmd.desc if cmd.desc else "<i>No description provided.</i>"
-            aliases = ""
-            if cmd.aliases:
-                aliases = f' (aliases: {", ".join(cmd.aliases)})'
-
-            mod_name = type(cmd.module).name
-            modules[mod_name][cmd.name] = desc + aliases
-
-        response = None
-        for mod_name, commands in sorted(modules.items()):
-            response = util.text.join_map(commands, heading=mod_name, parse_mode="html")
-
-        if response is not None:
-            button = [
-                [
-                    types.InlineKeyboardButton(
-                        "⇠ Back", callback_data="menu(Back)".encode()
-                    )
-                ]
-            ]
-            await query.edit_message_text(
-                response, reply_markup=types.InlineKeyboardMarkup(button)
-            )
-
+        commands = self._module_command_map.get(mod)
+        if not commands:
+            await query.answer(f"😿️ {mod} doesn't have any commands.")
             return
 
-        return await query.answer(f"😿️ {mod} doesn't have any commands.")
+        response = util.text.join_map(commands, heading=mod, parse_mode="html")
+        back_button = [
+            [types.InlineKeyboardButton("⇠ Back", callback_data="menu(Back)")]
+        ]
+        await query.edit_message_text(
+            response,
+            reply_markup=types.InlineKeyboardMarkup(back_button),
+        )
 
     @command.desc("List the commands")
     @command.usage("[filter: command or module name?]", optional=True)
