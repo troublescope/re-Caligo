@@ -67,8 +67,7 @@ def generate_input_media(
     file_id: str = None,
     buttons: InlineKeyboardMarkup = None,
 ) -> Dict[str, Any]:
-    media_class = INPUT_MEDIA[_type]
-    return {"media": media_class(file_id, caption=text), "reply_markup": buttons}
+    return {"media": INPUT_MEDIA[_type](file_id, caption=text), "reply_markup": buttons}
 
 
 def generate_inline_result(
@@ -86,7 +85,7 @@ def generate_inline_result(
                     reply_markup=buttons,
                 )
             ],
-            "cache_time": 0,
+            "cache_time": 900,
         }
 
     return {
@@ -100,7 +99,7 @@ def generate_inline_result(
                         if _type not in ["sticker", "audio"]
                         else {}
                     ),
-                    **({"caption": _text} if _type != "sticker" else {}),
+                    **({"caption": text} if _type != "sticker" else {}),
                 }
             )
         ],

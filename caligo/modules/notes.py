@@ -31,8 +31,7 @@ class Notes(module.Module):
         if not data:
             return
 
-        _type, _text, _file, _btns = data
-        resp = generate_inline_result(_type, _text, _file, _btns)
+        resp = generate_inline_result(*data)
         await query.answer(**resp)
 
     @listener.filters(filters.regex(r"^note:\w+$"))
@@ -65,7 +64,7 @@ class Notes(module.Module):
         _type, _text, _file, _btns = note_data
         if _btns:
             try:
-                bot_results = await self.bot.client_helper.get_inline_bot_results(
+                bot_results = await self.bot.client.get_inline_bot_results(
                     self.bot.client_helper.me.username, f"note:{note_name}"
                 )
                 if bot_results.results:
@@ -194,7 +193,9 @@ class Notes(module.Module):
 
     async def _file_id(self, file_id: str) -> Optional[str]:
         try:
-            usr_msg = await self.bot.client.send_cached_media(self.log_chat, file_id)
+            usr_msg = await self.bot.client.send_cached_media(
+                self.bot.log_chat, file_id
+            )
             bot_msg = await self.bot.client_helper.get_messages(
                 usr_msg.chat.id, usr_msg.id
             )
