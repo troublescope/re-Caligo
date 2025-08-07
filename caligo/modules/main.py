@@ -25,7 +25,9 @@ class Main(module.Module):
             aliases = f' (aliases: {", ".join(cmd.aliases)})' if cmd.aliases else ""
             self._module_command_map[mod_name][cmd.name] = desc + aliases
 
-        self._menu_buttons: list[list[types.InlineKeyboardButton]] = self.build_button()
+        self._menu_buttons: list[list[types.InlineKeyboardButton]] = (
+            await util.run_sync(self.build_button)
+        )
 
     def build_button(self) -> List[List[types.InlineKeyboardButton]]:
         modules = sorted(self._module_command_map.keys())
@@ -103,10 +105,15 @@ class Main(module.Module):
         mod = query.matches[0].group(1)
 
         if mod == "Back":
-            await query.edit_message_text(
-                "<b>Caligo Menu Helper</b>",
-                reply_markup=types.InlineKeyboardMarkup(self._menu_buttons),
-            )
+            try:
+                await query.edit_message_text(
+                    "<b>Caligo Menu Helper</b>",
+                    reply_markup=types.InlineKeyboardMarkup(self._menu_buttons),
+                )
+            except errors.MessageNotModified:
+                pass
+            except errors.FloodWait as e:
+                await asyncio.sleep(e.value)
             return
 
         if mod == "Close":
@@ -130,10 +137,15 @@ class Main(module.Module):
         back_button = [
             [types.InlineKeyboardButton("⇠ Back", callback_data="menu(Back)")]
         ]
-        await query.edit_message_text(
-            response,
-            reply_markup=types.InlineKeyboardMarkup(back_button),
-        )
+        try:
+            await query.edit_message_text(
+                response,
+                reply_markup=types.InlineKeyboardMarkup(back_button),
+            )
+        except errors.MessageNotModified:
+            pass
+        except errors.FloodWait as e:
+            await asyncio.sleep(e.value)
 
     @command.desc("List the commands")
     @command.usage("[filter: command or module name?]", optional=True)
