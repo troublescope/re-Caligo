@@ -140,9 +140,7 @@ class CommandDispatcher(CaligoBase):
         try:
             # Construct invocation context
             ctx = command.Context(
-                self,
-                message,
-                len(self.prefix) + len(message.command[0]) + 1,
+                self, message, len(self.prefix) + len(message.command[0]) + 1
             )
 
             try:

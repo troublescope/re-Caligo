@@ -139,8 +139,7 @@ class Main(module.Module):
         ]
         try:
             await query.edit_message_text(
-                response,
-                reply_markup=types.InlineKeyboardMarkup(back_button),
+                response, reply_markup=types.InlineKeyboardMarkup(back_button)
             )
         except errors.MessageNotModified:
             pass
@@ -158,7 +157,7 @@ class Main(module.Module):
             response: Any
             try:
                 response = await self.bot.client.get_inline_bot_results(
-                    bot=self.bot.client_helper.me.username,
+                    bot=self.bot.client_helper.me.username
                 )
             except errors.BotInlineDisabled:
                 return "<i>Bot Inline Disabled</i>"

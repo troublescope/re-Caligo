@@ -87,9 +87,7 @@ class AsyncCollection(AsyncBaseProperty, Generic[_DocumentType]):
 
     def __getitem__(self, name: str) -> "AsyncCollection":
         return AsyncCollection(
-            self.database,
-            f"{self.name}.{name}",
-            collection=self.dispatch[name],
+            self.database, f"{self.name}.{name}", collection=self.dispatch[name]
         )
 
     def __hash__(self) -> int:
