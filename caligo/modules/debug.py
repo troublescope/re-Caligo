@@ -250,12 +250,18 @@ Out:
         await ctx.respond(respond_text, parse_mode=pyrogram.enums.ParseMode.HTML)
 
     @command.desc("Show bot logs")
-    @command.usage("[--lines N | --full] [--paste | -p]")
+    @command.usage("[--lines N | --full] [--paste | -p] [--clear]")
     async def cmd_logs(self, ctx: command.Context):
         log_path = AsyncPath("caligo/caligo.log")
 
         if not await log_path.exists():
             await ctx.respond("❌ Log file not found.")
+            return
+
+        # Handle --clear
+        if ctx.flags.get("clear"):
+            await log_path.write_text("", encoding="utf-8")
+            await ctx.respond("✅ Logs cleared.")
             return
 
         content = await log_path.read_text(encoding="utf-8")
@@ -271,11 +277,15 @@ Out:
             lines = content.strip().splitlines()[-limit:]
 
         log_text = "\n".join(lines)
+        if not log_text.strip():
+            await ctx.respond("⚠️ Log file is empty.")
+            return
 
-        if ctx.flags.get("paste") or ctx.flags.get("p"):
+        # Force paste if >4000 chars
+        if ctx.flags.get("paste") or ctx.flags.get("p") or len(log_text) > 4000:
             self._log_cache = (
                 "\n".join(content.strip().splitlines())
-                if ctx.flags.get("full", False)
+                if ctx.flags.get("full", False) or len(log_text) > 4000
                 else log_text
             )
             try:
@@ -287,18 +297,13 @@ Out:
                     await self.bot.client.send_inline_bot_result(
                         ctx.msg.chat.id, bot_results.query_id, bot_results.results[0].id
                     )
-                return
+                    return
             except Exception:
-                await ctx.respond("Error: Could not send logs via inline mode.")
+                # fallback to file upload if paste fails
+                await ctx.msg.reply_document(str(log_path), caption="📜 Log file")
                 return
 
-        if len(log_text) > 4000:
-            await ctx.msg.reply_document(str(log_path), caption="📜 Log file")
-            return
-
-        await ctx.respond(
-            f"<pre language='bash'>{log_text}</pre>", parse_mode=ParseMode.HTML
-        )
+        await ctx.respond(f"<pre>{log_text}</pre>", parse_mode=ParseMode.HTML)
 
     @listener.filters(filters.regex(r"^logs:paste$"))
     async def on_inline_query(self, query: InlineQuery) -> None:
@@ -318,7 +323,7 @@ Out:
             paste_url = (await resp.text()).strip()
 
         reply_markup = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Open Paste", url=paste_url)]]
+            [[InlineKeyboardButton("Open Paste", url=paste_url + ".txt")]]
         )
         results = [
             InlineQueryResultArticle(
