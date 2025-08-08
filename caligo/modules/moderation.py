@@ -1,11 +1,11 @@
 import asyncio
-from datetime import datetime
 from typing import ClassVar, Optional
 
 from pyrogram.enums import ChatMembersFilter, ChatType
 from pyrogram.types import ChatMember
 
 from caligo import command, module
+from caligo.util import time as util_time
 
 
 class Moderation(module.Module):
@@ -51,7 +51,7 @@ class Moderation(module.Module):
             ctx, tag="admin", user_filter=ChatMembersFilter.ADMINISTRATORS
         )
 
-    @command.desc("reply to a message, mark as start until your purge command.")
+    @command.desc("Reply to a message, mark as start until your purge command.")
     @command.usage("purge", reply=True)
     async def cmd_purge(self, ctx: command.Context) -> Optional[str]:
         if not ctx.msg.reply_to_message:
@@ -59,11 +59,12 @@ class Moderation(module.Module):
 
         await ctx.respond("Purging...")
 
-        time_start = datetime.now()
+        start_us = util_time.usec()
+
         start, end = ctx.msg.reply_to_message.id, ctx.msg.id
         messages_id = []
-
         purged = 0
+
         for message_id in range(start, end):
             messages_id.append(message_id)
             if len(messages_id) == 100:
@@ -77,15 +78,13 @@ class Moderation(module.Module):
                 chat_id=ctx.msg.chat.id, message_ids=messages_id, revoke=True
             )
 
-        time_end = datetime.now()
-        run_time = (time_end - time_start).seconds
-        time = "second" if run_time <= 1 else "seconds"
-        msg = "message" if purged <= 1 else "messages"
+        elapsed_us = util_time.usec() - start_us
+        msg = "message" if purged == 1 else "messages"
 
         await ctx.respond(
-            f"__Purged {purged} {msg} in {run_time} {time}...__",
+            f"__Purged {purged} {msg} in {util_time.format_duration_us(elapsed_us)}...__",
             mode="repost",
-            delete_after=3.5,
+            delete_after=1.5,
         )
 
     @command.desc("Delete the replied message.")
