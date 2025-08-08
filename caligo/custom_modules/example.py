@@ -8,10 +8,10 @@ if sys.version_info >= (3, 10):
 else:
     from aiopath import PureAsyncPosixPath as PosixPath
 
+from pymongo.asynchronous.collection import AsyncCollection
 from pyrogram.types import Message
 
 from caligo import command, listener, module
-from caligo.core import database
 
 
 class ExampleModule(module.Module):
@@ -19,7 +19,7 @@ class ExampleModule(module.Module):
     disabled: ClassVar[bool] = True
     helpable: ClassVar[bool] = False
 
-    db: database.AsyncCollection
+    db: AsyncCollection
 
     async def on_load(self) -> None:
         self.db = self.bot.db.get_collection("example")

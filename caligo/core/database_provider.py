@@ -2,8 +2,10 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
+from pymongo import AsyncMongoClient
+from pymongo.asynchronous.database import AsyncDatabase
+
 from .base import CaligoBase
-from .database import AsyncClient, AsyncDatabase
 
 if TYPE_CHECKING:
     from .bot import Caligo
@@ -20,12 +22,13 @@ class DatabaseProvider(CaligoBase):
     def __init__(self: "Caligo", **kwargs: Any) -> None:
         if IS_TERMUX:
             self.log.info("Set DNS resolver for Termux enviroment")
-            import dns.resolver
+            import dns.asyncresolver
 
-            dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
-            dns.resolver.default_resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
+            async_resolver = dns.asyncresolver.Resolver(configure=False)
+            async_resolver.nameservers = ["8.8.8.8", "8.8.4.4", "1.1.1.1"]
+            dns.asyncresolver.default_resolver = async_resolver
 
-        client = AsyncClient(self.config["bot"]["db_uri"], connect=False)
+        client = AsyncMongoClient(self.config["bot"]["db_uri"], connect=False)
         self.db = client.get_database("CALIGO")
 
         # Propagate initialization to other mixins

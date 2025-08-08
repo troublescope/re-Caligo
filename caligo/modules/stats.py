@@ -1,9 +1,9 @@
 from typing import Any, ClassVar, Optional
 
+from pymongo.asynchronous.collection import AsyncCollection
 from pyrogram.types import Message
 
 from caligo import command, module, util
-from caligo.core import database
 
 USEC_PER_HOUR = 60 * 60 * 1000000
 USEC_PER_DAY = USEC_PER_HOUR * 24
@@ -30,7 +30,7 @@ def _calc_pd(stat: int, uptime: int) -> str:
 class Stats(module.Module):
     name: ClassVar[str] = "Stats"
 
-    db: database.AsyncCollection
+    db: AsyncCollection
 
     async def get(self, key: str) -> Optional[Any]:
         collection = await self.db.find_one({"_id": 0})

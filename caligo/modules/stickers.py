@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import BinaryIO, ClassVar
 
 from aiopath import AsyncPath
+from pymongo.asynchronous.collection import AsyncCollection
 from pyrogram import types
 from pyrogram.errors import StickersetInvalid
 from pyrogram.raw.functions.messages import GetStickerSet, UploadMedia
@@ -20,7 +21,6 @@ from pyrogram.raw.types import (
 )
 
 from caligo import command, module, util
-from caligo.core import database
 
 MAX_VIDEO_SIZE = 5 * 1024 * 1024
 
@@ -36,7 +36,7 @@ class LengthMismatchError(Exception): ...
 
 class Sticker(module.Module):
     name: ClassVar[str] = "Sticker"
-    db: database.AsyncCollection
+    db: AsyncCollection
 
     async def on_load(self):
         self.db = self.bot.db.get_collection(self.name.upper())

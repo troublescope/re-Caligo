@@ -7,18 +7,18 @@ from typing import Any, ClassVar, Mapping, Optional
 
 import speedtest
 from aiopath import AsyncPath
+from pymongo.asynchronous.collection import AsyncCollection
 from pyrogram import enums
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message
 
 from caligo import __version__, command, module, util
-from caligo.core import database
 
 
 class System(module.Module):
     name: ClassVar[str] = "System"
 
-    db: database.AsyncCollection
+    db: AsyncCollection
     restart_pending: bool
 
     async def on_load(self):

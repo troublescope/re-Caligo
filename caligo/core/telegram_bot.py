@@ -22,7 +22,7 @@ from pyrogram.types import CallbackQuery, InlineQuery, Message, ReplyParameters,
 from caligo.util import tg, time
 
 from .base import CaligoBase
-from .database.storage import PersistentStorage
+from .storage import PersistentStorage
 
 if TYPE_CHECKING:
     from .bot import Caligo

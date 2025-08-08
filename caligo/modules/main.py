@@ -3,16 +3,16 @@ import uuid
 from collections import defaultdict
 from typing import ClassVar, List, MutableMapping
 
+from pymongo.asynchronous.collection import AsyncCollection
 from pyrogram import enums, errors, filters, types
 from pyrogram.utils import get_channel_id, unpack_inline_message_id
 
 from caligo import command, listener, module, util
-from caligo.core import database
 
 
 class Main(module.Module):
     name: ClassVar[str] = "Main"
-    db: database.AsyncCollection
+    db: AsyncCollection
 
     async def on_load(self) -> None:
         self.db = self.bot.db[self.name.upper()]

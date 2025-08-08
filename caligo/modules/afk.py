@@ -2,6 +2,7 @@ import asyncio
 import random
 from datetime import datetime
 
+from pymongo.asynchronous.collection import AsyncCollection
 from pyrogram import filters
 from pyrogram.types import Message
 
@@ -10,6 +11,8 @@ from caligo import command, listener, module, util
 
 class AFK(module.Module):
     name = "AFK"
+
+    db: AsyncCollection
 
     async def on_load(self):
         self.db = self.bot.db.get_collection("AFK")

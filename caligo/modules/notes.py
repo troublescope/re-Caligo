@@ -1,12 +1,12 @@
 import asyncio
 from typing import Any, ClassVar, Dict, Optional, Tuple
 
+from pymongo.asynchronous.collection import AsyncCollection
 from pyrogram import filters
 from pyrogram.enums import ParseMode
 from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, InlineQuery
 
 from caligo import command, listener, module
-from caligo.core import database
 from caligo.util.tg import (
     build_button,
     extract_message,
@@ -17,7 +17,7 @@ from caligo.util.tg import (
 
 class Notes(module.Module):
     name: ClassVar[str] = "Notes"
-    db: database.AsyncCollection
+    db: AsyncCollection
     caches: Dict[str, Any]
 
     async def on_load(self) -> None:
