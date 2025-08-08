@@ -11,8 +11,18 @@ from typing import Any, ClassVar, Optional, Tuple
 
 import aiopath
 import pyrogram
+from aiopath import AsyncPath
+from pyrogram import filters
+from pyrogram.enums import ParseMode
+from pyrogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InlineQuery,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+)
 
-from caligo import command, module, util
+from caligo import command, listener, module, util
 
 
 async def reval(
@@ -139,6 +149,9 @@ async def reval(
 class Debug(module.Module):
     name: ClassVar[str] = "Debug"
 
+    async def on_load(self):
+        self._log_cache = ""
+
     @command.desc("Evaluate code")
     @command.usage("[code snippet]")
     @command.alias("exec", "e")
@@ -147,23 +160,17 @@ class Debug(module.Module):
             return "Give me code to evaluate."
 
         code = ctx.msg.content.markdown.split(maxsplit=1)[1]
-
         out_buf = io.StringIO()
 
-        # Message sending helper for convenience
         async def send(*args: Any, **kwargs: Any) -> pyrogram.types.Message:
             return await ctx.msg.reply(*args, **kwargs)
 
-        # Print wrapper to capture output
-        # We don't override sys.stdout to avoid interfering with other output
         def _print(*args: Any, **kwargs: Any) -> None:
             if "file" not in kwargs:
                 kwargs["file"] = out_buf
-
             return print(*args, **kwargs)
 
         eval_vars = {
-            # Contextual info
             "self": self,
             "ctx": ctx,
             "bot": self.bot,
@@ -174,7 +181,6 @@ class Debug(module.Module):
             "listeners": self.bot.listeners,
             "modules": self.bot.modules,
             "stdout": out_buf,
-            # Convenience aliases
             "context": ctx,
             "msg": ctx.msg,
             "message": ctx.msg,
@@ -182,24 +188,19 @@ class Debug(module.Module):
             "http": self.bot.http,
             "replied": ctx.reply_msg,
             "user": (ctx.reply_msg or ctx.msg).from_user,
-            # Helper functions
             "send": send,
             "print": _print,
-            # Built-in modules
             "inspect": inspect,
             "os": os,
             "re": re,
             "reval": reval,
             "sys": sys,
             "traceback": traceback,
-            # Pyrogram
             "pyrogram": pyrogram,
             "enums": pyrogram.enums,
             "types": pyrogram.types,
             "raw": pyrogram.raw,
-            # Aiopath
             "path": aiopath.AsyncPath,
-            # Bot
             "command": command,
             "module": module,
             "util": util,
@@ -209,32 +210,22 @@ class Debug(module.Module):
         try:
             with redirect_stdout(out_buf):
                 result, elapsed, exception = await reval(code, globals(), **eval_vars)
-
+                prefix = "" if exception is None else "⚠️ Error executing snippet\n\n"
                 if exception is not None:
-                    prefix = "⚠️ Error executing snippet\n\n"
                     result = str(exception)
-                else:
-                    prefix = ""
-
-        except Exception as e:  # skipcq: PYL-W0703
-            # Handle syntax errors and other exceptions from reval itself
+        except Exception as e:
             end_time = util.time.usec()
             elapsed = end_time - start_time
             prefix = "⚠️ Error executing snippet\n\n"
             result = e
 
-        # Always write result if no output has been collected thus far
         if not out_buf.getvalue() or result is not None:
             print(result, file=out_buf)
 
         el_str = util.time.format_duration_us(elapsed)
-
         out = out_buf.getvalue()
-        # Strip only ONE final newline to compensate for our message formatting
         if out.endswith("\n"):
             out = out[:-1]
-
-        # Replace empty output with "[No Output]"
         if not out.strip():
             out = "[No Output]"
 
@@ -245,30 +236,101 @@ Output:
 <b>⏱ {el_str}</b>"""
 
         if len(respond_text) > 2048:
-            data = ""
-            if len(code) > 1024:
-                code = code[:512] + "..."
-                data += f"Input:\n{code}"
-
             if len(out) > 1024:
                 async with self.bot.http.post(
                     "https://paste.rs", data=out.encode()
                 ) as resp:
                     paste_url = await resp.text()
-
-                out = out[:1024] + "..."
-                if data:
-                    data += f"\n\nOutput:\n{out}"
-
-                else:
-                    data = out
-
-            respond_text = f"""{prefix}<b>In</b>:
-<code>{escape(code)}</code>\n
+                respond_text = f"""{prefix}<b>In</b>:
+<code>{escape(code[:512] + '...' if len(code) > 1024 else code)}</code>\n
 Out:
-<code>{escape(out)}</code>\n
+<code>{escape(out[:1024] + '...')}</code>\n
 <b><a href={paste_url}>⏱ {el_str}</a></b>"""
 
+        await ctx.respond(respond_text, parse_mode=pyrogram.enums.ParseMode.HTML)
+
+    @command.desc("Show bot logs")
+    @command.usage("[--lines N | --full] [--paste | -p]")
+    async def cmd_logs(self, ctx: command.Context):
+        log_path = AsyncPath("caligo/caligo.log")
+
+        if not await log_path.exists():
+            await ctx.respond("❌ Log file not found.")
+            return
+
+        content = await log_path.read_text(encoding="utf-8")
+
+        if ctx.flags.get("full", False):
+            lines = content.strip().splitlines()
+        else:
+            try:
+                limit = int(ctx.flags.get("lines", 10))
+            except ValueError:
+                await ctx.respond("❌ Invalid number for --lines")
+                return
+            lines = content.strip().splitlines()[-limit:]
+
+        log_text = "\n".join(lines)
+
+        if ctx.flags.get("paste") or ctx.flags.get("p"):
+            self._log_cache = (
+                "\n".join(content.strip().splitlines())
+                if ctx.flags.get("full", False)
+                else log_text
+            )
+            try:
+                bot_results = await self.bot.client.get_inline_bot_results(
+                    self.bot.client_helper.me.username, "logs:paste"
+                )
+                if bot_results.results:
+                    await ctx.msg.delete()
+                    await self.bot.client.send_inline_bot_result(
+                        ctx.msg.chat.id, bot_results.query_id, bot_results.results[0].id
+                    )
+                return
+            except Exception:
+                await ctx.respond("Error: Could not send logs via inline mode.")
+                return
+
+        if len(log_text) > 4000:
+            await ctx.msg.reply_document(str(log_path), caption="📜 Log file")
+            return
+
         await ctx.respond(
-            respond_text, parse_mode=pyrogram.enums.parse_mode.ParseMode.HTML
+            f"<pre language='bash'>{log_text}</pre>", parse_mode=ParseMode.HTML
         )
+
+    @listener.filters(filters.regex(r"^logs:paste$"))
+    async def on_inline_query(self, query: InlineQuery) -> None:
+        log_text = self._log_cache
+        if not log_text:
+            await query.answer(
+                results=[],
+                switch_pm_text="No logs cached.",
+                switch_pm_parameter="start",
+                cache_time=0,
+            )
+            return
+
+        async with self.bot.http.post(
+            "https://paste.rs", data=log_text.encode()
+        ) as resp:
+            paste_url = (await resp.text()).strip()
+
+        reply_markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Open Paste", url=paste_url)]]
+        )
+        results = [
+            InlineQueryResultArticle(
+                title="📄 View logs on paste.rs",
+                description="Click to open full logs in paste.rs",
+                input_message_content=InputTextMessageContent(
+                    f"Logs uploaded",
+                    parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=False,
+                ),
+                reply_markup=reply_markup,
+            )
+        ]
+
+        await query.answer(results=results, cache_time=0)
