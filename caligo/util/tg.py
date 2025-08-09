@@ -85,7 +85,7 @@ def generate_inline_result(
                     reply_markup=buttons,
                 )
             ],
-            "cache_time": 900,
+            "cache_time": 0,
         }
 
     return {
@@ -103,7 +103,7 @@ def generate_inline_result(
                 }
             )
         ],
-        "cache_time": 900,
+        "cache_time": 0,
     }
 
 
@@ -188,26 +188,32 @@ async def send_as_document(
 
 
 def extract_message(
-    msg: Message,
+    event: Message, reply: Message
 ) -> Tuple[str, Optional[str], Optional[str], Optional[Button]]:
-    target_msg = msg.reply_to_message or msg
-    text_content = target_msg.text or target_msg.caption or ""
-    _text, _btns = parse_button(text_content)
+    msg, text = event, ""
+
+    if reply:
+        msg = reply
+        text = msg.content.html if msg.content else ""
+        if len(event.content.split()) > 2:
+            text += f"\n{event.content.split(maxsplit=2)[-1]}"
+    else:
+        text = msg.content.html.split(maxsplit=2)[-1]
+
+    _text, _btns = parse_button(text)
     _type = "text"
     _file = None
 
-    if target_msg.media:
-        _type = target_msg.media.value
-        media = getattr(target_msg, _type)
-        if target_msg.photo:
+    if msg.media:
+        _type = msg.media.value
+        media = getattr(msg, _type)
+        if msg.photo:
             _file = media.sizes[-1].file_id
         elif hasattr(media, "file_id"):
             _file = media.file_id
 
-    if target_msg.reply_markup and isinstance(
-        target_msg.reply_markup, InlineKeyboardMarkup
-    ):
-        _btns.extend(extract_inline_keyboard(target_msg.reply_markup.inline_keyboard))
+    if msg.reply_markup:
+        _btns.extend(extract_inline_keyboard(msg.reply_markup.inline_keyboard))
 
     return _type, _text, _file, _btns
 
@@ -225,7 +231,7 @@ def extract_inline_keyboard(
             elif btn.url:
                 results.append((text, "url", btn.url, same))
             elif btn.copy_text:
-                results.append((text, "copy", btn.copy_text, same))
+                results.append((text, "copy", btn.copy_text.text, same))
     return results
 
 

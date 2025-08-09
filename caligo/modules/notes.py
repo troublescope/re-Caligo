@@ -117,7 +117,9 @@ class Notes(module.Module):
             await ctx.respond("Trigger cannot contain '#', '.', or '$' characters.")
             return
 
-        (_type, _text, _file, _btns) = extract_message(ctx.msg)
+        (_type, _text, _file, _btns) = extract_message(
+            ctx.msg, ctx.msg.reply_to_message
+        )
 
         if _file and _btns:
             _file = await self._file_id(_file)
@@ -131,8 +133,11 @@ class Notes(module.Module):
             ctx.respond(f"Note **{trigger}** has been saved."),
         )
 
+        if trigger in self.caches:
+            del self.caches[trigger]
+            
         _btns = build_button(_btns)
-        self.caches[trigger] = (_type, _text, _file, _btns)
+        self.caches.update({trigger: (_type, _text, _file, _btns)})
 
     @command.desc("List all saved notes")
     async def cmd_notes(self, ctx: command.Context) -> None:
@@ -186,7 +191,7 @@ class Notes(module.Module):
             return None
 
         note = doc["notes"][name]
-        buttons = build_button(note.get("buttons", []))
+        buttons = build_button(note.get("btns", []))
         result = (note.get("type"), note.get("text"), note.get("file"), buttons)
         self.caches[name] = result
         return result
