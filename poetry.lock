@@ -1347,7 +1347,7 @@ fast = ["pytgcrypto (>1.2.9.2,<=1.4)", "uvloop (>0.18.0,<=0.19.0)"]
 
 [package.source]
 type = "git"
-url = "https://github.com/TelegramPlayground/pyrogram"
+url = "https://github.com/TelegramPlayground/pyrogram.git"
 reference = "HEAD"
 resolved_reference = "e6678a033e295ffab9e52d2c4fd3b95740dbcc1e"
 
@@ -1878,4 +1878,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "b5ca5f3f956cec558d19515584a9db3b214c020557c80decdd6f1702832253e0"
+content-hash = "9648b07f0f09b02dc560ba1d6c6a3651c99ef0bc69bf6f6a913cd118547fa111"

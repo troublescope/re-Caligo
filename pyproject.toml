@@ -49,7 +49,7 @@ speedtest-cli = "^2.1.3"
 tomli = {version = "^2.0.1", python = "<3.12"}
 TgCrypto = "^1.2.5"
 uvloop = "^0.21.0"
-pyrotgfork = {git = "https://github.com/TelegramPlayground/pyrogram"}
+pyrotgfork = {git = "https://github.com/TelegramPlayground/pyrogram.git"}
 anyio = "^4.10.0"
 
 [tool.poetry.group.dev.dependencies]
