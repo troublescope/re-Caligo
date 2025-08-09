@@ -26,22 +26,63 @@ class Main(module.Module):
             aliases = f' (aliases: {", ".join(cmd.aliases)})' if cmd.aliases else ""
             self._module_command_map[mod_name][cmd.name] = desc + aliases
 
-        self._menu_buttons: list[list[types.InlineKeyboardButton]] = (
-            await util.run_sync(self.build_button)
-        )
+        # Store all modules for pagination
+        self._all_modules = sorted(self._module_command_map.keys())
+        self._modules_per_page = 8  # 4 rows × 2 buttons per row
+        self._total_pages = (
+            len(self._all_modules) + self._modules_per_page - 1
+        ) // self._modules_per_page
 
-    def build_button(self) -> List[List[types.InlineKeyboardButton]]:
-        modules = sorted(self._module_command_map.keys())
-        button_row: List[types.InlineKeyboardButton] = [
-            types.InlineKeyboardButton(mod, callback_data=f"menu({mod})")
-            for mod in modules
-        ]
-        buttons = [
-            button_row[i * 3 : (i + 1) * 3] for i in range((len(button_row) + 2) // 3)
-        ]
+    def build_button(self, page: int = 0) -> List[List[types.InlineKeyboardButton]]:
+        """Build paginated buttons with 2 buttons per row"""
+        buttons = []
+
+        # Calculate start and end indices for current page
+        start_idx = page * self._modules_per_page
+        end_idx = min(start_idx + self._modules_per_page, len(self._all_modules))
+        current_modules = self._all_modules[start_idx:end_idx]
+
+        # Create module buttons (2 per row)
+        for i in range(0, len(current_modules), 2):
+            row = []
+            for j in range(2):
+                if i + j < len(current_modules):
+                    mod = current_modules[i + j]
+                    row.append(
+                        types.InlineKeyboardButton(mod, callback_data=f"menu({mod})")
+                    )
+            buttons.append(row)
+
+        # Add navigation buttons if we have more than one page
+        if self._total_pages > 1:
+            nav_row = []
+
+            # Previous button
+            prev_page = page - 1 if page > 0 else self._total_pages - 1
+            nav_row.append(
+                types.InlineKeyboardButton("«", callback_data=f"menu_page({prev_page})")
+            )
+
+            # Page indicator
+            nav_row.append(
+                types.InlineKeyboardButton(
+                    f"{page + 1}/{self._total_pages}", callback_data="noop"
+                )
+            )
+
+            # Next button
+            next_page = page + 1 if page < self._total_pages - 1 else 0
+            nav_row.append(
+                types.InlineKeyboardButton("»", callback_data=f"menu_page({next_page})")
+            )
+
+            buttons.append(nav_row)
+
+        # Add close button at bottom
         buttons.append(
             [types.InlineKeyboardButton("✗ Close", callback_data="menu(Close)")]
         )
+
         return buttons
 
     async def extract_inline_id(self, inline_id: str) -> tuple[int, int]:
@@ -83,35 +124,61 @@ class Main(module.Module):
         ]
 
         if query.from_user and query.from_user.id == self.bot.uid:
+            # Build first page buttons
+            menu_buttons = await util.run_sync(self.build_button, 0)
             results.append(
                 types.InlineQueryResultArticle(
                     id=str(uuid.uuid4()),
                     title="Menu",
                     input_message_content=types.InputTextMessageContent(
-                        "<b>Caligo Menu Helper</b>"
+                        "<b>Re-Caligo Menu Helper</b>"
                     ),
                     description="Menu Helper.",
-                    reply_markup=types.InlineKeyboardMarkup(self._menu_buttons),
+                    reply_markup=types.InlineKeyboardMarkup(menu_buttons),
                 )
             )
 
         await query.answer(results=results, cache_time=5)
 
     @listener.priority(90)
-    @listener.filters(filters.regex(r"menu\((\w+)\)$"))
+    @listener.filters(filters.regex(r"menu(?:_page)?\((.+)\)$"))
     async def on_callback_query(self, query: types.CallbackQuery) -> None:
         if query.from_user and query.from_user.id != self.bot.uid:
             await query.answer("Not For You!", show_alert=True)
             return
 
-        mod = re.match(r"menu\((\w+)\)$", query.data)
-        mod = mod.group(1) if mod else None
+        match = re.match(r"menu(?:_page)?\((.+)\)$", query.data)
+        if not match:
+            return
+
+        action_or_page = match.group(1)
+
+        if query.data.startswith("menu_page("):
+            try:
+                page = int(action_or_page)
+                menu_buttons = await util.run_sync(self.build_button, page)
+                await query.edit_message_text(
+                    "<b>Caligo Menu Helper</b>",
+                    reply_markup=types.InlineKeyboardMarkup(menu_buttons),
+                )
+            except (ValueError, errors.MessageNotModified):
+                pass
+            except errors.FloodWait as e:
+                await asyncio.sleep(e.value)
+            return
+
+        if action_or_page == "noop":
+            await query.answer()
+            return
+
+        mod = action_or_page
 
         if mod == "Back":
             try:
+                menu_buttons = await util.run_sync(self.build_button, 0)
                 await query.edit_message_text(
                     "<b>Caligo Menu Helper</b>",
-                    reply_markup=types.InlineKeyboardMarkup(self._menu_buttons),
+                    reply_markup=types.InlineKeyboardMarkup(menu_buttons),
                 )
             except errors.MessageNotModified:
                 pass
@@ -125,9 +192,12 @@ class Main(module.Module):
                 await self.bot.client.delete_messages(chat_id, msg_id)
             except errors.ChatIdInvalid:
                 await query.answer("😿️ Couldn't close message")
+                menu_buttons = await util.run_sync(self.build_button, 0)
+                # Remove close button for this case
+                menu_buttons = menu_buttons[:-1]
                 await query.edit_message_text(
                     "<b>Caligo Menu Helper</b>",
-                    reply_markup=types.InlineKeyboardMarkup(self._menu_buttons[:-1]),
+                    reply_markup=types.InlineKeyboardMarkup(menu_buttons),
                 )
             return
 
@@ -137,12 +207,14 @@ class Main(module.Module):
             return
 
         response = util.text.join_map(commands, heading=mod, parse_mode="html")
+
         back_button = [
             [types.InlineKeyboardButton("⇠ Back", callback_data="menu(Back)")]
         ]
         try:
             await query.edit_message_text(
-                response, reply_markup=types.InlineKeyboardMarkup(back_button)
+                f"<blockquote expandable>{response}</blockquote>",
+                reply_markup=types.InlineKeyboardMarkup(back_button),
             )
         except errors.MessageNotModified:
             pass
@@ -224,7 +296,6 @@ class Main(module.Module):
 
             return "<i>That filter didn't match any commands or modules.</i>"
 
-        # Gather full help
         for name, cmd in self.bot.commands.items():
             if filt:
                 if cmd.module.name != filt:
@@ -243,7 +314,6 @@ class Main(module.Module):
             section = util.text.join_map(commands, heading=mod_name, parse_mode="html")
             response_sections.append(section)
 
-        # Final full expandable blockquote
         full_response = "\n\n".join(response_sections)
         await ctx.respond(
             text=f"<blockquote expandable>\n{full_response}\n</blockquote>",

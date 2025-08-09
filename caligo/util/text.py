@@ -2,7 +2,7 @@ from typing import Any, Iterable, Mapping, Optional
 
 import emoji.unicode_codes
 
-ITEM_SEPARATOR = "\n    • "
+ITEM_SEPARATOR = "\n  • "
 
 
 def join_list(items: Iterable[str]) -> str:
