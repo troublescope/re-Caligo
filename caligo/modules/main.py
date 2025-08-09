@@ -1,4 +1,5 @@
 import asyncio
+import re
 import uuid
 from collections import defaultdict
 from typing import ClassVar, List, MutableMapping
@@ -96,13 +97,15 @@ class Main(module.Module):
 
         await query.answer(results=results, cache_time=5)
 
+    @listener.priority(90)
     @listener.filters(filters.regex(r"menu\((\w+)\)$"))
     async def on_callback_query(self, query: types.CallbackQuery) -> None:
         if query.from_user and query.from_user.id != self.bot.uid:
             await query.answer("Not For You!", show_alert=True)
             return
 
-        mod = query.matches[0].group(1)
+        mod = re.match(r"menu\((\w+)\)$", query.data)
+        mod = mod.group(1) if mod else None
 
         if mod == "Back":
             try:

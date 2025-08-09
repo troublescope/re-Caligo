@@ -59,7 +59,8 @@ class Notes(module.Module):
         note_name = ctx.input.split()[0]
         note_data = await self._get_note(note_name)
         if not note_data:
-            return await ctx.respond(f"Note `#{note_name}` not found.")
+            await ctx.respond(f"Note `#{note_name}` not found.")
+            return
 
         _type, _text, _file, _btns = note_data
         if _btns:
@@ -135,7 +136,7 @@ class Notes(module.Module):
 
         if trigger in self.caches:
             del self.caches[trigger]
-            
+
         _btns = build_button(_btns)
         self.caches.update({trigger: (_type, _text, _file, _btns)})
 
