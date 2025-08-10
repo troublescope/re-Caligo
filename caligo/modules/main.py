@@ -32,6 +32,11 @@ class Main(module.Module):
             len(self._all_modules) + self._modules_per_page - 1
         ) // self._modules_per_page
 
+        # Prebuild and cache all pages of buttons
+        self._prebuilt_buttons: dict[int, List[List[types.InlineKeyboardButton]]] = {}
+        for page in range(self._total_pages):
+            self._prebuilt_buttons[page] = self.build_button(page)
+
     def build_button(self, page: int = 0) -> List[List[types.InlineKeyboardButton]]:
         """Build paginated buttons with 2 buttons per row"""
         buttons = []
@@ -112,8 +117,8 @@ class Main(module.Module):
         ]
 
         if query.from_user and query.from_user.id == self.bot.uid:
-            # Build first page buttons
-            menu_buttons = await util.run_sync(self.build_button, 0)
+            # Use cached buttons page 0
+            menu_buttons = self._prebuilt_buttons.get(0, self.build_button(0))
             results.append(
                 types.InlineQueryResultArticle(
                     id=str(uuid.uuid4()),
@@ -144,7 +149,7 @@ class Main(module.Module):
         if query.data.startswith("menu_page("):
             try:
                 page = int(action_or_page)
-                menu_buttons = await util.run_sync(self.build_button, page)
+                menu_buttons = self._prebuilt_buttons.get(page, self.build_button(page))
                 await query.edit_message_text(
                     "<b>Caligo Menu Helper</b>",
                     reply_markup=types.InlineKeyboardMarkup(menu_buttons),
@@ -163,7 +168,7 @@ class Main(module.Module):
 
         if mod == "Back":
             try:
-                menu_buttons = await util.run_sync(self.build_button, 0)
+                menu_buttons = self._prebuilt_buttons.get(0, self.build_button(0))
                 await query.edit_message_text(
                     "<b>Caligo Menu Helper</b>",
                     reply_markup=types.InlineKeyboardMarkup(menu_buttons),
@@ -182,7 +187,8 @@ class Main(module.Module):
                 await self.bot.client.delete_messages(chat_id, msg_id)
             except errors.ChatIdInvalid:
                 await query.answer("😿️ Couldn't close message")
-                menu_buttons = await util.run_sync(self.build_button, 0)
+                # Remove close button only and update menu buttons
+                menu_buttons = self._prebuilt_buttons.get(0, self.build_button(0))
                 menu_buttons = menu_buttons[:-1]
                 await query.edit_message_text(
                     "<b>Caligo Menu Helper</b>",
@@ -221,7 +227,7 @@ class Main(module.Module):
         modules: MutableMapping[str, MutableMapping[str, str]] = defaultdict(dict)
 
         if self.bot.helper_initialized and not filt:
-            response: Any
+            response: any
             try:
                 response = await self.bot.client.get_inline_bot_results(
                     bot=self.bot.client_helper.me.username

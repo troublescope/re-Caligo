@@ -26,8 +26,6 @@ from pyrogram.types import (
     Message,
 )
 
-from .async_helpers import run_sync
-
 MESSAGE_CHAR_LIMIT = 4096
 TRUNCATION_SUFFIX = "... (truncated)"
 Button = List[Tuple[str, str, str, bool]]
@@ -314,26 +312,27 @@ def revert_button(button: Button) -> str:
 
 
 async def unpack_inline_id(bot_uid: int, inline_id: str) -> tuple[int, int]:
-    unpacked = await run_sync(pyrogram.utils.unpack_inline_message_id, inline_id)
+    unpacked = pyrogram.utils.unpack_inline_message_id(inline_id)
 
-    if isinstance(unpacked, pyrogram.raw.types.InputBotInlineMessageID64):
-        owner_id = unpacked.owner_id
-        message_id = unpacked.id
-    elif isinstance(unpacked, pyrogram.raw.types.InputBotInlineMessageID):
-        combined_id = unpacked.id
-        owner_id = (combined_id >> 32) & 0xFFFFFFFF
-        message_id = combined_id & 0xFFFFFFFF
+    match unpacked:
+        case pyrogram.raw.types.InputBotInlineMessageID64(
+            owner_id=owner_id, id=message_id
+        ):
+            pass
+        case pyrogram.raw.types.InputBotInlineMessageID(id=combined_id):
+            owner_id = (combined_id >> 32) & 0xFFFFFFFF
+            message_id = combined_id & 0xFFFFFFFF
 
-        if owner_id > 0x7FFFFFFF:
-            owner_id -= 0x100000000
-        if message_id > 0x7FFFFFFF:
-            message_id -= 0x100000000
-    else:
-        raise TypeError(f"Unexpected unpacked type: {type(unpacked)}")
+            if owner_id > 0x7FFFFFFF:
+                owner_id -= 0x100000000
+            if message_id > 0x7FFFFFFF:
+                message_id -= 0x100000000
+        case _:
+            raise TypeError(f"Unexpected unpacked type: {type(unpacked)}")
 
     if owner_id == bot_uid:
         chat_id = owner_id
     else:
-        chat_id = await run_sync(pyrogram.utils.get_channel_id, abs(owner_id))
+        chat_id = pyrogram.utils.get_channel_id(abs(owner_id))
 
     return chat_id, message_id
