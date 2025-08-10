@@ -6,7 +6,6 @@ from typing import ClassVar, List, MutableMapping
 
 from pymongo.asynchronous.collection import AsyncCollection
 from pyrogram import enums, errors, filters, types
-from pyrogram.utils import get_channel_id, unpack_inline_message_id
 
 from caligo import command, listener, module, util
 
@@ -84,17 +83,6 @@ class Main(module.Module):
         )
 
         return buttons
-
-    async def extract_inline_id(self, inline_id: str) -> tuple[int, int]:
-        unpacked = await util.run_sync(unpack_inline_message_id, inline_id)
-        return (
-            (
-                unpacked.owner_id
-                if unpacked.owner_id == self.bot.uid
-                else await util.run_sync(get_channel_id, abs(unpacked.owner_id))
-            ),
-            unpacked.id,
-        )
 
     async def on_inline_query(self, query: types.InlineQuery) -> None:
         if query.query:
@@ -188,17 +176,21 @@ class Main(module.Module):
 
         if mod == "Close":
             try:
-                chat_id, msg_id = await self.extract_inline_id(query.inline_message_id)
+                chat_id, msg_id = await util.tg.unpack_inline_id(
+                    self.bot.uid, query.inline_message_id
+                )
                 await self.bot.client.delete_messages(chat_id, msg_id)
             except errors.ChatIdInvalid:
                 await query.answer("😿️ Couldn't close message")
                 menu_buttons = await util.run_sync(self.build_button, 0)
-                # Remove close button for this case
                 menu_buttons = menu_buttons[:-1]
                 await query.edit_message_text(
                     "<b>Caligo Menu Helper</b>",
                     reply_markup=types.InlineKeyboardMarkup(menu_buttons),
                 )
+            except Exception as e:
+                self.bot.log.error(str(e))
+                await query.answer("😿️ Error closing message")
             return
 
         commands = self._module_command_map.get(mod)
