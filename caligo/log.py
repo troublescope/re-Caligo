@@ -38,3 +38,5 @@ def setup_log(colorlog_enable: bool = False) -> None:
     logging.getLogger("pymongo").setLevel(logging.WARNING)
     logging.getLogger("pyrogram").setLevel(logging.ERROR)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("instaloader").setLevel(logging.CRITICAL)
+    logging.getLogger("requests").setLevel(logging.WARNING)

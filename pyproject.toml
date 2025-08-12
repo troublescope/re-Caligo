@@ -51,6 +51,7 @@ TgCrypto = "^1.2.5"
 uvloop = "^0.21.0"
 pyrotgfork = {git = "https://github.com/TelegramPlayground/pyrogram.git"}
 anyio = "^4.10.0"
+instaloader = "^4.14.2"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
