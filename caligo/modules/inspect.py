@@ -153,7 +153,7 @@ class Inspection(module.Module):
         try:
             # Sample over 0.5s for accurate values
             usage_per_core = psutil.cpu_percent(interval=0.5, percpu=True)
-            cpu_info["Usage per core"] = [f"{u:.1f}%" for u in usage_per_core]
+            cpu_info["Usage per core"] = ", ".join(f"{u:.1f}%" for u in usage_per_core)
         except Exception:
             cpu_info["Usage per core"] = "N/A"
 
@@ -223,5 +223,3 @@ class Inspection(module.Module):
             net_info = {"Network Info": "N/A"}
 
         sections.append(join_map(net_info, heading="NETWORK", parse_mode="html"))
-
-        return "\n\n".join(sections)
