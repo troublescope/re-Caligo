@@ -1,7 +1,14 @@
+import asyncio
 import inspect
+import platform
 import re
+import sys
 from typing import ClassVar, Optional
 
+import aiohttp
+import psutil
+import pymongo
+import pyrogram
 from pyrogram.enums import ParseMode
 
 from caligo import command, module, util
@@ -19,7 +26,6 @@ class Inspection(module.Module):
             return f"__Command__ `{cmd_name}` __doesn't exist.__"
 
         src = await util.run_sync(inspect.getsource, self.bot.commands[cmd_name].func)
-        # Strip first level of indentation
         filtered_src = re.sub(r"^ {4}", "", src, flags=re.MULTILINE)
 
         await ctx.respond(
@@ -55,7 +61,6 @@ class Inspection(module.Module):
             f_chat = None
             if reply_msg.forward_from_chat:
                 f_chat = reply_msg.forward_from_chat
-
                 lines.append(f"Forwarded message {f_chat.type} ID: `{f_chat.id}`")
 
             f_msg_id = None
@@ -82,3 +87,133 @@ class Inspection(module.Module):
             .replace("list", "**List**")
         )
         await ctx.respond(text, disable_web_page_preview=True)
+
+    @command.desc("Show CPU, memory, disk, and network information")
+    async def cmd_sysinfo(self, ctx: command.Context) -> None:
+        await ctx.respond("<b>Gathering system info...</b>")
+        info = await asyncio.to_thread(self.get_info_text)
+        await ctx.respond(info)
+
+    def get_info_text(self) -> str:
+        hrb = util.misc.human_readable_bytes
+        join_map = util.text.join_map
+        uname = platform.uname()
+        sections = []
+
+        # System info
+        sections.append(
+            join_map(
+                {
+                    "System": uname.system,
+                    "Node Name": uname.node,
+                    "Release": uname.release,
+                    "Version": uname.version,
+                    "Machine": uname.machine,
+                    "Processor": uname.processor or "N/A",
+                    "Python": sys.version.split()[0],
+                },
+                heading="SYSTEM INFO",
+                parse_mode="html",
+            )
+        )
+
+        # Libraries info
+        sections.append(
+            join_map(
+                {
+                    "pyrogram": f"{pyrogram.__version__} "
+                    f"(<b>{getattr(pyrogram, '__fork_name__', 'Official')}</b> | "
+                    f"<code>{pyrogram.raw.all.layer}</code>)",
+                    "aiohttp": aiohttp.__version__,
+                    "pymongo": pymongo.__version__,
+                },
+                heading="LIBRARIES",
+                parse_mode="html",
+            )
+        )
+
+        # CPU info
+        cpu_info = {}
+        try:
+            cpu_info["Physical cores"] = psutil.cpu_count(logical=False)
+        except Exception:
+            cpu_info["Physical cores"] = "N/A"
+
+        try:
+            cpu_info["Total cores"] = psutil.cpu_count(logical=True)
+        except Exception:
+            cpu_info["Total cores"] = "N/A"
+
+        try:
+            freq = psutil.cpu_freq()
+            cpu_info["Frequency"] = f"{freq.current:.2f} MHz" if freq else "N/A"
+        except Exception:
+            cpu_info["Frequency"] = "N/A"
+
+        try:
+            cpu_info["Usage per core"] = psutil.cpu_percent(percpu=True)
+        except Exception:
+            cpu_info["Usage per core"] = "N/A"
+
+        try:
+            cpu_info["Total usage"] = f"{psutil.cpu_percent()}%"
+        except Exception:
+            cpu_info["Total usage"] = "N/A"
+
+        sections.append(join_map(cpu_info, heading="CPU INFO", parse_mode="html"))
+
+        # Memory info
+        try:
+            mem = psutil.virtual_memory()
+            mem_info = {
+                "Total": hrb(mem.total),
+                "Available": hrb(mem.available),
+                "Used": hrb(mem.used),
+                "Percentage": f"{mem.percent}%",
+            }
+        except Exception:
+            mem_info = {"Memory Info": "N/A"}
+
+        sections.append(join_map(mem_info, heading="MEMORY", parse_mode="html"))
+
+        # Disk info
+        try:
+            partitions = psutil.disk_partitions()
+        except Exception:
+            partitions = []
+
+        if not partitions:
+            sections.append(
+                join_map({"Disk Info": "N/A"}, heading="DISK", parse_mode="html")
+            )
+        else:
+            for part in partitions:
+                try:
+                    usage = psutil.disk_usage(part.mountpoint)
+                    sections.append(
+                        join_map(
+                            {
+                                "Mountpoint": part.mountpoint,
+                                "Type": part.fstype,
+                                "Total": hrb(usage.total),
+                                "Used": hrb(usage.used),
+                                "Free": hrb(usage.free),
+                                "Percent": f"{usage.percent}%",
+                            },
+                            heading=part.device,
+                            parse_mode="html",
+                        )
+                    )
+                except Exception:
+                    continue
+
+        # Network info
+        try:
+            net = psutil.net_io_counters()
+            net_info = {"Sent": hrb(net.bytes_sent), "Recv": hrb(net.bytes_recv)}
+        except Exception:
+            net_info = {"Network Info": "N/A"}
+
+        sections.append(join_map(net_info, heading="NETWORK", parse_mode="html"))
+
+        return "\n\n".join(sections)
