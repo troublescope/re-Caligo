@@ -100,7 +100,7 @@ class Inspection(module.Module):
         uname = platform.uname()
         sections = []
 
-        # System info
+        # SYSTEM INFO
         sections.append(
             join_map(
                 {
@@ -117,7 +117,7 @@ class Inspection(module.Module):
             )
         )
 
-        # Libraries info
+        # LIBRARIES
         sections.append(
             join_map(
                 {
@@ -132,42 +132,49 @@ class Inspection(module.Module):
             )
         )
 
-        # CPU info
-        cpu_info = {}
+        # CPU INFO (manual formatting)
+        cpu_lines = []
         try:
-            cpu_info["Physical cores"] = psutil.cpu_count(logical=False)
+            cpu_lines.append(
+                f"  • Physical cores: {psutil.cpu_count(logical=False) or 'N/A'}"
+            )
         except Exception:
-            cpu_info["Physical cores"] = "N/A"
+            cpu_lines.append("  • Physical cores: N/A")
 
         try:
-            cpu_info["Total cores"] = psutil.cpu_count(logical=True)
+            cpu_lines.append(
+                f"  • Total cores: {psutil.cpu_count(logical=True) or 'N/A'}"
+            )
         except Exception:
-            cpu_info["Total cores"] = "N/A"
+            cpu_lines.append("  • Total cores: N/A")
 
         try:
             freq = psutil.cpu_freq()
-            cpu_info["Frequency"] = f"{freq.current:.2f} MHz" if freq else "N/A"
-        except Exception:
-            cpu_info["Frequency"] = "N/A"
-
-        try:
-            # Sample over 0.5s for accurate values
-            usage_per_core = psutil.cpu_percent(interval=0.5, percpu=True)
-            cpu_info["Usage per core"] = "\n".join(
-                f"• Core {i+1}: {u:.1f}%" for i, u in enumerate(usage_per_core)
+            cpu_lines.append(
+                f"  • Frequency: {freq.current:.2f} MHz"
+                if freq
+                else "  • Frequency: N/A"
             )
         except Exception:
-            cpu_info["Usage per core"] = "N/A"
+            cpu_lines.append("  • Frequency: N/A")
+
+        try:
+            usage_per_core = psutil.cpu_percent(interval=0.5, percpu=True)
+            cpu_lines.append("  • Usage per core:")
+            for i, u in enumerate(usage_per_core):
+                cpu_lines.append(f"    • Core {i+1}: {u:.1f}%")
+        except Exception:
+            cpu_lines.append("  • Usage per core: N/A")
 
         try:
             total_usage = psutil.cpu_percent(interval=None)
-            cpu_info["Total usage"] = f"{total_usage:.1f}%"
+            cpu_lines.append(f"  • Total usage: {total_usage:.1f}%")
         except Exception:
-            cpu_info["Total usage"] = "N/A"
+            cpu_lines.append("  • Total usage: N/A")
 
-        sections.append(join_map(cpu_info, heading="CPU INFO", parse_mode="html"))
+        sections.append("CPU INFO:\n" + "\n".join(cpu_lines))
 
-        # Memory info
+        # MEMORY
         try:
             mem = psutil.virtual_memory()
             mem_info = {
@@ -181,7 +188,7 @@ class Inspection(module.Module):
 
         sections.append(join_map(mem_info, heading="MEMORY", parse_mode="html"))
 
-        # Disk info (skip useless container mounts)
+        # DISK INFO (skip useless mounts)
         try:
             partitions = psutil.disk_partitions()
         except Exception:
@@ -216,7 +223,7 @@ class Inspection(module.Module):
                 except Exception:
                     continue
 
-        # Network info
+        # NETWORK
         try:
             net = psutil.net_io_counters()
             net_info = {"Sent": hrb(net.bytes_sent), "Recv": hrb(net.bytes_recv)}
