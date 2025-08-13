@@ -151,12 +151,14 @@ class Inspection(module.Module):
             cpu_info["Frequency"] = "N/A"
 
         try:
-            cpu_info["Usage per core"] = psutil.cpu_percent(percpu=True)
+            usage_per_core = psutil.cpu_percent(percpu=True)
+            cpu_info["Usage per core"] = [f"{u:.1f}%" for u in usage_per_core]
         except Exception:
             cpu_info["Usage per core"] = "N/A"
 
         try:
-            cpu_info["Total usage"] = f"{psutil.cpu_percent()}%"
+            total_usage = psutil.cpu_percent()
+            cpu_info["Total usage"] = f"{total_usage:.1f}%"
         except Exception:
             cpu_info["Total usage"] = "N/A"
 
@@ -176,7 +178,7 @@ class Inspection(module.Module):
 
         sections.append(join_map(mem_info, heading="MEMORY", parse_mode="html"))
 
-        # Disk info
+        # Disk info (deduplicate devices)
         try:
             partitions = psutil.disk_partitions()
         except Exception:
@@ -187,7 +189,12 @@ class Inspection(module.Module):
                 join_map({"Disk Info": "N/A"}, heading="DISK", parse_mode="html")
             )
         else:
+            seen_devices = set()
             for part in partitions:
+                if part.device in seen_devices:
+                    continue
+                seen_devices.add(part.device)
+
                 try:
                     usage = psutil.disk_usage(part.mountpoint)
                     sections.append(
