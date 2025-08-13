@@ -151,13 +151,14 @@ class Inspection(module.Module):
             cpu_info["Frequency"] = "N/A"
 
         try:
-            usage_per_core = psutil.cpu_percent(percpu=True)
+            # Sample over 0.5s for accurate values
+            usage_per_core = psutil.cpu_percent(interval=0.5, percpu=True)
             cpu_info["Usage per core"] = [f"{u:.1f}%" for u in usage_per_core]
         except Exception:
             cpu_info["Usage per core"] = "N/A"
 
         try:
-            total_usage = psutil.cpu_percent()
+            total_usage = psutil.cpu_percent(interval=None)
             cpu_info["Total usage"] = f"{total_usage:.1f}%"
         except Exception:
             cpu_info["Total usage"] = "N/A"
