@@ -298,7 +298,7 @@ class Context:
         msg: Optional[Message] = None,
         reuse_response: bool = False,
         delete_after: Optional[Union[int, float]] = None,
-        multi: bool = True,
+        multi: bool = False,  # Error fuck
         parse_mode: Optional[ParseMode] = None,
         **kwargs: Any,
     ) -> Message:

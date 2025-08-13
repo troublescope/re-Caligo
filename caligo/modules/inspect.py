@@ -153,7 +153,9 @@ class Inspection(module.Module):
         try:
             # Sample over 0.5s for accurate values
             usage_per_core = psutil.cpu_percent(interval=0.5, percpu=True)
-            cpu_info["Usage per core"] = ", ".join(f"{u:.1f}%" for u in usage_per_core)
+            cpu_info["Usage per core"] = "\n".join(
+                f"• Core {i+1}: {u:.1f}%" for i, u in enumerate(usage_per_core)
+            )
         except Exception:
             cpu_info["Usage per core"] = "N/A"
 
@@ -179,23 +181,22 @@ class Inspection(module.Module):
 
         sections.append(join_map(mem_info, heading="MEMORY", parse_mode="html"))
 
-        # Disk info (deduplicate devices)
+        # Disk info (skip useless container mounts)
         try:
             partitions = psutil.disk_partitions()
         except Exception:
             partitions = []
+
+        useless_mounts = {"/etc/resolv.conf", "/etc/hostname", "/etc/hosts"}
 
         if not partitions:
             sections.append(
                 join_map({"Disk Info": "N/A"}, heading="DISK", parse_mode="html")
             )
         else:
-            seen_devices = set()
             for part in partitions:
-                if part.device in seen_devices:
+                if part.mountpoint in useless_mounts:
                     continue
-                seen_devices.add(part.device)
-
                 try:
                     usage = psutil.disk_usage(part.mountpoint)
                     sections.append(
@@ -223,3 +224,5 @@ class Inspection(module.Module):
             net_info = {"Network Info": "N/A"}
 
         sections.append(join_map(net_info, heading="NETWORK", parse_mode="html"))
+
+        return "\n\n".join(sections)
