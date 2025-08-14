@@ -1476,13 +1476,16 @@ optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "pypdl-1.5.5-py3-none-any.whl", hash = "sha256:354682072d14c60b152534dd822a8e1e63672bfb640bc9e1446c7c7dbd09a549"},
-    {file = "pypdl-1.5.5.tar.gz", hash = "sha256:239b7c2b86b9ff12c7a6293d41249dbbbaf8838c07227d9ddf3dc746ba534517"},
+    {file = "main.zip", hash = "sha256:488c8ce240b2321409390832d79095011081c9b028e2bd726ed1a87eb4d5d108"},
 ]
 
 [package.dependencies]
 aiofiles = "*"
 aiohttp = "*"
+
+[package.source]
+type = "url"
+url = "https://github.com/troublescope/pypdl/archive/refs/heads/main.zip"
 
 [[package]]
 name = "pyrotgfork"
@@ -2072,4 +2075,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "cf6fae7bc3d95210bc11e5c650fbcf702e4ba2eefa70b656319cd82900d08ac9"
+content-hash = "fdfcb2589be3ead7d464b0013bb227e42e7bb1acc21eeec4c7c3c1b6c4b87366"
