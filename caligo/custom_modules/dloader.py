@@ -60,7 +60,6 @@ class PypdlManager:
                     eta = "Fetching size..."
                 else:
                     eta = "—"
-
             except Exception as e:
                 t.status, t.error = "Failed", str(e)
                 pct = 0.0
@@ -70,8 +69,15 @@ class PypdlManager:
             if p.completed and t.status == "Downloading":
                 t.status = "Complete"
 
+            # Remove cancelled or failed tasks from view and delete file
             if t.status in ("Cancelled", "Failed"):
+                try:
+                    if await t.path.exists():
+                        await t.path.unlink()
+                except Exception as e:
+                    self.log.warning("Failed to remove file %s: %s", t.path, e)
                 self.downloads.pop(t.gid, None)
+                continue
 
             lines.append(
                 f"`{t.path.name}`\n"
@@ -88,6 +94,13 @@ class PypdlManager:
         last_update = datetime.now() - timedelta(seconds=10)
         while not self.stopping:
             if not self.downloads:
+                # Delete progress message if nothing to show
+                if self.invoker:
+                    try:
+                        await self.invoker.delete()
+                    except Exception:
+                        pass
+                    self.invoker = None
                 await asyncio.sleep(0.5)
                 continue
 
@@ -100,7 +113,7 @@ class PypdlManager:
                     except MessageNotModified:
                         pass
                     except FloodWait as e:
-                        await asyncio.sleep(e.x)
+                        await asyncio.sleep(e.value)
                     except Exception as e:
                         self.log.exception("Failed to send progress update: %s", e)
                 last_update = now
@@ -142,6 +155,7 @@ class PypDL(module.Module):
         filepath = base / util.misc.sanitize_filename(name)
 
         p = Pypdl()
+        gid = uuid.uuid4().hex[:8]
         try:
             p.start(
                 url=url,
@@ -158,9 +172,17 @@ class PypDL(module.Module):
                 timeout=300,
             )
         except Exception as e:
+            # Remove partial file if exists
+            try:
+                if await filepath.exists():
+                    await filepath.unlink()
+            except Exception as ex:
+                self.mgr.log.warning(
+                    "Failed to remove failed file %s: %s", filepath, ex
+                )
+            self.mgr.downloads.pop(gid, None)
             return f"__Failed__: {e}"
 
-        gid = uuid.uuid4().hex[:8]
         self.mgr.downloads[gid] = DownloadTask(gid, p, filepath)
         if self.mgr.invoker:
             try:
