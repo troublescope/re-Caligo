@@ -176,7 +176,7 @@ class Network(module.Module):
                 ctx.msg.chat.id,
                 str(file_path),
                 message_thread_id=ctx.msg.message_thread_id,
-                force_document=True,
+                disable_content_type_detection=0,
                 progress=prog_func,
                 progress_args=(start_time, "upload", ctx, file_path.name),
             )
