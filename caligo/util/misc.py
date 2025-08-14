@@ -1,4 +1,6 @@
-from typing import Any, Callable, Sequence, Tuple, Union
+import re
+from typing import Any, Callable, Optional, Sequence, Tuple, Union
+from urllib.parse import urlparse
 
 
 def find_prefixed_funcs(obj: Any, prefix: str) -> Sequence[Tuple[str, Callable]]:
@@ -29,3 +31,15 @@ def human_readable_bytes(
         else:
             break
     return f"{value:.{digits}f}" + delim + chosen_unit + postfix
+
+
+def get_filename_from_url(url: str) -> Optional[str]:
+    """Extract filename from a URL path."""
+    path = urlparse(url).path
+    name = path.rsplit("/", 1)[-1]
+    return name or None
+
+
+def sanitize_filename(name: str) -> str:
+    """Remove illegal filename characters."""
+    return re.sub(r'[<>:"/\\|?*]', "_", name)

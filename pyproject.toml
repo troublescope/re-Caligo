@@ -53,6 +53,7 @@ pyrotgfork = "^2.2.15"
 anyio = "^4.10.0"
 instaloader = "^4.14.2"
 psutil = "^7.0.0"
+pypdl = "^1.5.5"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"

@@ -16,6 +16,18 @@ files = [
 caio = ">=0.9.0,<0.10.0"
 
 [[package]]
+name = "aiofiles"
+version = "24.1.0"
+description = "File support for asyncio."
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "aiofiles-24.1.0-py3-none-any.whl", hash = "sha256:b4ec55f4195e3eb5d7abd1bf7e061763e864dd4954231fb8539a0ef8bb8260e5"},
+    {file = "aiofiles-24.1.0.tar.gz", hash = "sha256:22a075c9e5a3810f0c2e48f3008c94d68c65d763b9b03857924c99e57355166c"},
+]
+
+[[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
 description = "Happy Eyeballs for asyncio"
@@ -1457,6 +1469,22 @@ test = ["pytest (>=8.2)", "pytest-asyncio (>=0.24.0)"]
 zstd = ["zstandard"]
 
 [[package]]
+name = "pypdl"
+version = "1.5.5"
+description = "A concurrent pure python download manager"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "pypdl-1.5.5-py3-none-any.whl", hash = "sha256:354682072d14c60b152534dd822a8e1e63672bfb640bc9e1446c7c7dbd09a549"},
+    {file = "pypdl-1.5.5.tar.gz", hash = "sha256:239b7c2b86b9ff12c7a6293d41249dbbbaf8838c07227d9ddf3dc746ba534517"},
+]
+
+[package.dependencies]
+aiofiles = "*"
+aiohttp = "*"
+
+[[package]]
 name = "pyrotgfork"
 version = "2.2.15"
 description = "Fork of Pyrogram. Elegant, modern and asynchronous Telegram MTProto API framework in Python for users and bots"
@@ -2044,4 +2072,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "1628defb105edd8f6a774509e946be739cac04b5776079cecc4e392b05b245d8"
+content-hash = "cf6fae7bc3d95210bc11e5c650fbcf702e4ba2eefa70b656319cd82900d08ac9"
