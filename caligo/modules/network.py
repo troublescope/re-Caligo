@@ -16,13 +16,17 @@ async def prog_func(
     ctx: command.Context,
     file_name: str,
 ) -> None:
-    percent = current / total
-    end_time = util.time.sec() - start_time
+    percent = current / total if total else 0
+    elapsed = util.time.sec() - start_time
     now = datetime.now()
 
     try:
-        speed = round(current / end_time, 2)
-        eta = timedelta(seconds=int(round((total - current) / speed)))
+        speed = round(current / elapsed, 2) if elapsed else 0
+        eta = (
+            timedelta(seconds=int(round((total - current) / speed)))
+            if speed
+            else timedelta(seconds=0)
+        )
     except ZeroDivisionError:
         speed = 0
         eta = timedelta(seconds=0)
@@ -42,13 +46,15 @@ async def prog_func(
         f"eta - {util.time.format_duration_td(eta)}__\n\n"
     )
 
-    # Only edit message once every 5 seconds to avoid ratelimits
-    if (
-        ctx.last_update_time is None
-        or (now - ctx.last_update_time).total_seconds() >= 5
-    ):
+    # Always show first and last update instantly
+    if percent >= 1 or ctx.last_update_time is None:
         await ctx.respond(progress)
+        ctx.last_update_time = now
+        return
 
+    # Mid-transfer updates are rate-limited to every 5 seconds
+    if (now - ctx.last_update_time).total_seconds() >= 5:
+        await ctx.respond(progress)
         ctx.last_update_time = now
 
 
@@ -100,29 +106,35 @@ class Network(module.Module):
             return "__The message you replied to doesn't contain any media.__"
 
         start_time = util.time.sec()
-
         await ctx.respond("Preparing to download...")
 
-        # Check if media is group or not
         try:
             media_group = await self.bot.client.get_media_group(
                 ctx.chat.id, reply_msg.id
             )
         except ValueError:
-            media_group = []
-            media_group.append(reply_msg)
+            media_group = [reply_msg]
 
         results = set()
         for msg in media_group:
             media = getattr(msg, msg.media.value)
+
             try:
-                name = media.file_name
+                base_name = media.file_name
             except AttributeError:
-                name = f"{msg.media.value}_{(media.date or datetime.now()).strftime('%Y-%m-%d_%H-%M-%S')}"
+                base_name = f"{msg.media.value}_{(media.date or datetime.now()).strftime('%Y-%m-%d_%H-%M-%S')}"
+
+            # Append msg.id to ensure uniqueness
+            if "." in base_name:
+                name, ext = base_name.rsplit(".", 1)
+                name = f"{name}_{msg.id}.{ext}"
+            else:
+                name = f"{base_name}_{msg.id}"
 
             task = self.bot.loop.create_task(
                 self.bot.client.download_media(
                     msg,
+                    file_name=f"{ctx.msg._client.WORKDIR}/{self.bot.config.get('bot')['download_path']}/{name}",
                     progress=prog_func,
                     progress_args=(start_time, "download", ctx, name),
                 )
@@ -143,11 +155,9 @@ class Network(module.Module):
                 continue
 
             if isinstance(result, str):
-                path += (
-                    f"\n× `{self.bot.client.workdir}/downloads/{result.split('/')[-1]}`"
-                )
+                path += f"\n× `{result}`"
             else:
-                path += f"\n× `{self.bot.client.workdir}/downloads/{result.name}`"
+                path += f"\n× `{result.name}`"
 
         if not path:
             return "__Failed to download media.__"
