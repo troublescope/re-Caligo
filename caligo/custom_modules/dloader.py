@@ -23,7 +23,6 @@ class DownloadTask:
         self.path = path
         self.status = "Downloading"
         self.error: Optional[str] = None
-        self.start_time = datetime.now()  # For our own ETA calc
 
 
 class PypdlManager:
@@ -50,44 +49,17 @@ class PypdlManager:
         for t in list(self.downloads.values()):
             p = t.pypdl
             try:
-                done_b = int(getattr(p, "current_size", 0) or 0)
-                total_b = int(getattr(p, "size", 0) or 0)
+                done_b = int(p.current_size or 0)
+                total_b = int(p.size or 0)
+                pct = float(p.progress or 0)
+                speed_b = int((p.speed or 0) * 1024 * 1024)  # MB/s → B/s
 
-                # Progress %
-                raw_pct = getattr(p, "progress", None)
-                try:
-                    pct = float(raw_pct) if raw_pct is not None else None
-                except Exception:
-                    pct = None
-                if (pct is None or pct <= 1) and total_b > 0:
-                    pct = (done_b / total_b) * 100.0
-                if pct is None:
-                    pct = 0.0
-                pct = max(0.0, min(100.0, pct))
-
-                # Speed (convert KB/s to B/s if needed)
-                raw_speed = getattr(p, "speed", 0) or 0
-                try:
-                    raw_speed = float(raw_speed)
-                except Exception:
-                    raw_speed = 0.0
-                if raw_speed > 10000:
-                    speed_bps = raw_speed
+                if p.eta and p.eta > 0:
+                    eta = str(timedelta(seconds=int(p.eta)))
+                elif total_b == 0:
+                    eta = "Fetching size..."
                 else:
-                    speed_bps = raw_speed * 1024.0
-                speed_b = int(speed_bps)
-
-                # Custom ETA calculation
-                elapsed = (datetime.now() - t.start_time).total_seconds()
-                if done_b > 0 and elapsed > 0:
-                    avg_speed = done_b / elapsed
-                    if avg_speed > 0 and total_b > done_b:
-                        remaining = total_b - done_b
-                        eta = str(timedelta(seconds=int(remaining / avg_speed)))
-                    else:
-                        eta = "—"
-                else:
-                    eta = "Starting..."
+                    eta = "—"
 
             except Exception as e:
                 t.status, t.error = "Failed", str(e)
@@ -95,7 +67,7 @@ class PypdlManager:
                 done_b = total_b = speed_b = 0
                 eta = "—"
 
-            if getattr(p, "completed", False) and t.status == "Downloading":
+            if p.completed and t.status == "Downloading":
                 t.status = "Complete"
 
             if t.status in ("Cancelled", "Failed"):
@@ -230,9 +202,8 @@ class PypDL(module.Module):
         if not t or t.status != "Paused":
             return {"ok": False, "message": "__Not paused or GID not found.__"}
         try:
-            t.start_time = datetime.now()  # reset ETA timer
             t.pypdl.start(
-                url=getattr(t.pypdl, "url", None),
+                url=t.pypdl.url,
                 file_path=str(t.path),
                 segments=10,
                 multisegment=True,
