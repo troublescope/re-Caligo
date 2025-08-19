@@ -40,7 +40,7 @@ Update = Union[CallbackQuery, InlineQuery, List[Message], Message]
 class TelegramBot(CaligoBase):
     bot_client: Client
     client: Client
-    prefix: str
+    prefixes: List[str]
     user: User
     uid: int
     start_time_us: int
@@ -76,13 +76,12 @@ class TelegramBot(CaligoBase):
             storage_engine=PersistentStorage(name, self.db),  # type: ignore
         )
 
-        self.prefix = self.config["bot"]["prefix"]
         # Override default prefix if found any saved in database
         data = (
-            await self.db["MAIN"].find_one({"_id": 0}, {"prefix": 1, "log_chat": 1})
+            await self.db["MAIN"].find_one({"_id": 0}, {"prefixes": 1, "log_chat": 1})
             or {}
         )
-        self.prefix = data.get("prefix", self.config["bot"]["prefix"])
+        self.prefixes = data.get("prefixes", self.config["bot"]["prefixes"])
         self.log_chat = data.get("log_chat", 0)
 
         # Initialize bot client helper if has token

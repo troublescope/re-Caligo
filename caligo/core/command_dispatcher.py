@@ -106,12 +106,12 @@ class CommandDispatcher(CaligoBase):
 
     def command_predicate(self: "Caligo") -> Filter:
         async def func(_: Filter, client: Client, message: Message) -> bool:
-            if message.via_bot:
+            if message.via_bot or not (text := message.content):
                 return False
 
-            if message.content is not None and message.content.startswith(self.prefix):
+            for prefix in self.prefixes:
                 parts = message.content.split()
-                parts[0] = parts[0][len(self.prefix) :]  # Remove prefix
+                parts[0] = parts[0][len(prefix) :]  # Remove prefix
 
                 # Filter if command is not in commands
                 try:
@@ -140,7 +140,7 @@ class CommandDispatcher(CaligoBase):
         try:
             # Construct invocation context
             ctx = command.Context(
-                self, message, len(self.prefix) + len(message.command[0]) + 1
+                self, message, len(self.prefixes[0]) + len(message.command[0]) + 1
             )
 
             try:

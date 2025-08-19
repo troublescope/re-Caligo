@@ -325,13 +325,13 @@ class Main(module.Module):
     async def cmd_prefix(self, ctx: command.Context) -> str:
         new_prefix = ctx.input
         if not new_prefix:
-            return f"<b>Prefix:</b> <code>{self.bot.prefix}</code>"
+            return f"<b>Prefix:</b> <code>{' '.join(self.bot.prefixes)}</code>"
 
-        self.bot.prefix = new_prefix
+        self.bot.prefixes = new_prefix.split()
         await self.db.update_one(
-            {"_id": 0}, {"$set": {"prefix": new_prefix}}, upsert=True
+            {"_id": 0}, {"$set": {"prefixes": new_prefix}}, upsert=True
         )
-        return f"<b>Prefix set to:</b> <code>{self.bot.prefix}</code>"
+        return f"<b>Prefix set to:</b> <code>{', '.join(self.bot.prefixes)}</code>"
 
     @command.desc("Get or change log chat ID")
     @command.alias("setlogchat", "getlogchat")
