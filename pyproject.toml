@@ -44,7 +44,7 @@ colorlog = "^6.7.0"
 emoji = "^2.14.1"
 gitpython = "^3.1.45"
 pillow = "^11.3.0"
-pymongo = "^4.14.0"
+pymongo = "^4.14.1"
 speedtest-cli = "^2.1.3"
 tomli = {version = "^2.0.1", python = "<3.12"}
 TgCrypto = "^1.2.5"
