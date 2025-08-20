@@ -70,7 +70,12 @@ class TelegramBot(CaligoBase):
     async def init_client(self: "Caligo") -> None:
         api_id = self.config["telegram"]["api_id"]
         api_hash = self.config["telegram"]["api_hash"]
+        bot_token = self.config["telegram"]["helper"].get("token")
         session_string = self.config["telegram"]["session_string"]
+
+        if not api_id or not api_hash or not bot_token:
+            self.log.critical("Missing required Telegram credentials: api_id/api_hash")
+            sys.exit(1)
 
         # Initialize Telegram client with gathered parameters
         self.client = Client(
@@ -93,16 +98,14 @@ class TelegramBot(CaligoBase):
         self.log_chat = data.get("log_chat", 0)
 
         # Initialize bot client helper if has token
-        bot_token = self.config["telegram"]["helper"].get("token")
-        if bot_token:
-            self.client_helper = Client(
-                name := "caligo_helper",
-                api_id=api_id,
-                api_hash=api_hash,
-                bot_token=bot_token,
-                workdir="caligo",
-                storage_engine=PersistentStorage(name, self.db),  # type: ignore
-            )
+        self.client_helper = Client(
+            name := "caligo_helper",
+            api_id=api_id,
+            api_hash=api_hash,
+            bot_token=bot_token,
+            workdir="caligo",
+            storage_engine=PersistentStorage(name, self.db),  # type: ignore
+        )
 
     async def start(self: "Caligo") -> None:
         self.log.info("Starting")
