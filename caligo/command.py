@@ -16,7 +16,7 @@ from typing import (
 from pyrogram.enums import ParseMode
 from pyrogram.filters import Filter
 from pyrogram.handlers import CallbackQueryHandler, MessageHandler
-from pyrogram.types import Chat, Message, Update
+from pyrogram.types import Chat, LinkPreviewOptions, Message, Update
 
 from caligo import util
 
@@ -298,8 +298,9 @@ class Context:
         msg: Optional[Message] = None,
         reuse_response: bool = False,
         delete_after: Optional[Union[int, float]] = None,
-        multi: bool = False,  # Error fuck
+        multi: bool = False,
         parse_mode: Optional[ParseMode] = None,
+        preview: bool = False,  # 👈 added explicit toggle
         **kwargs: Any,
     ) -> Message:
         """
@@ -307,14 +308,15 @@ class Context:
 
         Args:
             text (str): The message content to send.
-            mode (str, optional): The response mode: 'edit', 'reply', or 'repost'.
-            redact (bool): Whether to redact sensitive content before sending.
+            mode (str, optional): 'edit', 'reply', or 'repost'.
+            redact (bool): Whether to redact sensitive content.
             msg (Message, optional): The message to respond to. Defaults to ctx.msg.
-            reuse_response (bool): If True, reuse the previous response message if possible.
-            delete_after (float | int, optional): If set, deletes the response after N seconds.
-            multi (bool): If True, split long messages into multiple parts (up to max_pages).
-            parse_mode (ParseMode, optional): Pyrogram parse mode (e.g., ParseMode.HTML).
-            **kwargs: Additional keyword arguments passed to the send function.
+            reuse_response (bool): Reuse the previous response if possible.
+            delete_after (float | int, optional): Deletes the response after N seconds.
+            multi (bool): Split long messages into multiple parts.
+            parse_mode (ParseMode, optional): e.g., ParseMode.HTML.
+            preview (bool): Whether to show link previews (default: False).
+            **kwargs: Passed to Pyrogram send/edit methods.
 
         Returns:
             Message: The sent or edited response message.
@@ -324,17 +326,20 @@ class Context:
         if redact:
             text = self.bot.redact_message(text)
 
-        # If multi is enabled and message is long, use split logic
+        # Multi-page handling
         if multi and len(text) > util.tg.MESSAGE_CHAR_LIMIT:
             return await self.respond_split(
-                text, mode=mode, parse_mode=parse_mode, **kwargs
+                text, mode=mode, parse_mode=parse_mode, preview=preview, **kwargs
             )
 
-        # Apply parse_mode if specified
+        # Apply parse_mode
         if parse_mode is not None:
             kwargs["parse_mode"] = parse_mode
 
-        # Handle response based on mode
+        # Always apply link preview option
+        kwargs["link_preview_options"] = LinkPreviewOptions(is_disabled=not preview)
+
+        # Handle modes
         if mode == "edit":
             self.response = await msg.edit(text=text, **kwargs)
 
@@ -342,8 +347,6 @@ class Context:
             if reuse_response and self.response:
                 self.response = await self.response.edit(text=text, **kwargs)
             else:
-                if "disable_web_page_preview" not in kwargs:
-                    kwargs["disable_web_page_preview"] = True
                 self.response = await msg.reply(text, **kwargs)
 
         elif mode == "repost":
@@ -360,77 +363,3 @@ class Context:
             self.response = None  # type: ignore
 
         return self.response  # type: ignore
-
-    async def respond_split(
-        self,
-        text: str,
-        *,
-        max_pages: Optional[int] = None,
-        redact: Optional[bool] = None,
-        **kwargs: Any,
-    ) -> Message:
-        if redact is None:
-            redact = self.bot.config["bot"]["redact_responses"]
-
-        if max_pages is None:
-            max_pages = self.bot.config["bot"]["overflow_page_limit"]
-
-        if redact:
-            # Redact before splitting in case the sensitive content is on a message boundary
-            text = self.bot.redact_message(text)
-
-        pages_sent = 0
-        last_msg: Message = None  # type: ignore
-        while text and pages_sent < max_pages:
-            # Make sure that there's an ellipsis placed at both the beginning and end,
-            # depending on whether there's more content to be shown
-            # The conditions are a bit complex, so just use a primitive LUT for now
-            if len(text) <= 4096:
-                # Low remaining content might require no ellipses
-                if pages_sent == 0:
-                    page = text[: util.tg.MESSAGE_CHAR_LIMIT]
-                    ellipsis_chars = 0
-                else:
-                    page = "..." + text[: util.tg.MESSAGE_CHAR_LIMIT - 3]
-                    ellipsis_chars = 3
-            elif pages_sent == max_pages - 1:
-                # Last page should use the standard truncation path if it's too large
-                if pages_sent == 0:
-                    page = text
-                    ellipsis_chars = 0
-                else:
-                    page = "..." + text
-                    ellipsis_chars = 3
-            else:
-                # Remaining content in other pages might need two ellipses
-                if pages_sent == 0:
-                    page = text[: util.tg.MESSAGE_CHAR_LIMIT - 3] + "..."
-                    ellipsis_chars = 3
-                else:
-                    page = "..." + text[: util.tg.MESSAGE_CHAR_LIMIT - 6] + "..."
-                    ellipsis_chars = 6
-
-            last_msg = await self.respond_multi(page, **kwargs)
-            text = text[util.tg.MESSAGE_CHAR_LIMIT - ellipsis_chars :]
-            pages_sent += 1
-
-        return last_msg
-
-    async def respond_multi(
-        self,
-        *args: Any,
-        mode: Optional[str] = None,
-        msg: Message = None,  # type: ignore
-        reuse_response: bool = False,
-        **kwargs: Any,
-    ) -> Message:
-        # First response is the same
-        if self.response:
-            # After that, force a reply to the previous response
-            if mode is None:
-                mode = "reply"
-            if msg is None:
-                msg = self.response
-        return await self.respond(
-            *args, mode=mode, msg=msg, reuse_response=reuse_response, **kwargs
-        )

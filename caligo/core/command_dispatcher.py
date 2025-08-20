@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, Iterable, MutableMapping, Optional
 from pyrogram.client import Client
 from pyrogram.errors import MessageNotModified
 from pyrogram.filters import Filter, create
-from pyrogram.types import Message
+from pyrogram.types import LinkPreviewOptions, Message
 
 from caligo import command, module, util
 
@@ -153,12 +153,16 @@ class CommandDispatcher(CaligoBase):
                 )
             except Exception as e:  # skipcq: PYL-W0703
                 cmd.module.log.error(f"Error in command '{cmd.name}'", exc_info=e)
-                await ctx.respond(
-                    "**In**:\n"
-                    f"{ctx.input if ctx.input is not None else message.content}\n\n"
-                    "**Out**:\n⚠️ Error executing command:\n"
-                    f"```{util.error.format_exception(e)}```"
-                )
+                if self.log_chat:
+                    _log = await self.client.send_message(
+                        self.log_chat,
+                        "**In**:\n"
+                        f"{ctx.input if ctx.input is not None else message.content}\n\n"
+                        "**Out**:\n⚠️ Error executing command:\n"
+                        f"```{util.error.format_exception(e)}```",
+                        link_preview_options=LinkPreviewOptions(is_disabled=True),
+                    )
+                    await ctx.respond(f"[Something wrong.]({_log.link})")
 
             await self.dispatch_event("command", cmd, message)
         except Exception as e:  # skipcq: PYL-W0703

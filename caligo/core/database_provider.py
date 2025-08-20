@@ -25,7 +25,7 @@ class DatabaseProvider(CaligoBase):
             import dns.asyncresolver
 
             async_resolver = dns.asyncresolver.Resolver(configure=False)
-            async_resolver.nameservers = ["8.8.8.8", "8.8.4.4", "1.1.1.1"]
+            async_resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
             dns.asyncresolver.default_resolver = async_resolver
 
         client = AsyncMongoClient(self.config["bot"]["db_uri"], connect=False)

@@ -17,7 +17,14 @@ from pyrogram.handlers.chosen_inline_result_handler import ChosenInlineResultHan
 from pyrogram.handlers.deleted_messages_handler import DeletedMessagesHandler
 from pyrogram.handlers.inline_query_handler import InlineQueryHandler
 from pyrogram.handlers.message_handler import MessageHandler
-from pyrogram.types import CallbackQuery, InlineQuery, Message, ReplyParameters, User
+from pyrogram.types import (
+    CallbackQuery,
+    InlineQuery,
+    LinkPreviewOptions,
+    Message,
+    ReplyParameters,
+    User,
+)
 
 from caligo.util import tg, time
 
@@ -318,10 +325,10 @@ class TelegramBot(CaligoBase):
         mode: Optional[str] = None,
         redact: bool = True,
         response: Optional[Message] = None,
+        preview: bool = False,  # 👈 explicit toggle
         **kwargs: Any,
     ) -> Message:
         if text:
-
             if redact:
                 text = self.redact_message(text)
 
@@ -329,44 +336,42 @@ class TelegramBot(CaligoBase):
             if len(str(text)) > tg.MESSAGE_CHAR_LIMIT:
                 await msg.edit("Sending output as a file.")
                 response = await tg.send_as_document(text, msg, input_arg)
-
                 await msg.delete()
                 return response
 
-        # Default to disabling link previews in responses
-        if (
-            "disable_web_page_preview" not in kwargs
-            or kwargs["disable_web_page_preview"] is None
-        ):
-            kwargs["disable_web_page_preview"] = True
+        # build link preview option
+        link_preview = LinkPreviewOptions(is_disabled=not preview)
 
-        # Use selected response mode if not overridden by invoker
+        # Default mode
         if mode is None:
             mode = "edit"
 
         if mode == "edit":
-            return await msg.edit(text=text, **kwargs)
+            return await msg.edit(
+                text=text, link_preview_options=link_preview, **kwargs
+            )
 
         if mode == "reply":
             if response is not None:
-                # Already replied, so just edit the existing reply to reduce spam
-                return await response.edit(text=text, **kwargs)
-
-            # Reply since we haven't done so yet
-            return await msg.reply(text, **kwargs)
+                return await response.edit(
+                    text=text, link_preview_options=link_preview, **kwargs
+                )
+            return await msg.reply(text, link_preview_options=link_preview, **kwargs)
 
         if mode == "repost":
             if response is not None:
-                # Already reposted, so just edit the existing reply to reduce spam
-                return await response.edit(text=text, **kwargs)
+                return await response.edit(
+                    text=text, link_preview_options=link_preview, **kwargs
+                )
 
-            # Repost since we haven't done so yet
             if kwargs.get("document"):
-                del kwargs["disable_web_page_preview"]
                 response = await msg.reply_document(**kwargs)
             else:
                 response = await msg.reply(
-                    text, reply_parameters=ReplyParameters(message_id=msg.id), **kwargs
+                    text,
+                    reply_parameters=ReplyParameters(message_id=msg.id),
+                    link_preview_options=link_preview,
+                    **kwargs,
                 )
             await msg.delete()
             return response
