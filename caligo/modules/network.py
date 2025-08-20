@@ -144,10 +144,10 @@ class Network(module.Module):
 
             if isinstance(result, str):
                 path += (
-                    f"\n× `{self.bot.client.workdir}/downloads/{result.split('/')[-1]}`"
+                    f"\n× `{self.bot.client.WORKDIR}/downloads/{result.split('/')[-1]}`"
                 )
             else:
-                path += f"\n× `{self.bot.client.workdir}/downloads/{result.name}`"
+                path += f"\n× `{self.bot.client.WORKDIR}/downloads/{result.name}`"
 
         if not path:
             return "__Failed to download media.__"
