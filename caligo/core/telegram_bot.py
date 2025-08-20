@@ -1,5 +1,6 @@
 import asyncio
 import signal
+import sys
 from functools import partial
 from typing import TYPE_CHECKING, Any, List, Optional, Type, Union
 
