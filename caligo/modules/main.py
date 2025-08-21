@@ -161,7 +161,7 @@ class Main(module.Module):
             return
 
         if action_or_page == "noop":
-            await query.answer()
+            await query.answer("Canggih ga boy?")
             return
 
         mod = action_or_page
