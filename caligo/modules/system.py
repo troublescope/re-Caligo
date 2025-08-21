@@ -199,7 +199,7 @@ f"Time: {util.time.format_duration_us(after - before)}""",
 
     @command.desc("Update this bot from Git and restart")
     @command.usage("[remote name?]", optional=True)
-    @command.alias("up", "upd")
+    @command.alias("upd")
     async def cmd_update(self, ctx: command.Context) -> Optional[str]:
         remote_name = ctx.input
 
