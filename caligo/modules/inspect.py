@@ -86,7 +86,7 @@ class Inspection(module.Module):
             .replace("'", "")
             .replace("list", "**List**")
         )
-        await ctx.respond(text, disable_web_page_preview=True)
+        await ctx.respond(text)
 
     @command.desc("Show CPU, memory, disk, and network information")
     async def cmd_sysinfo(self, ctx: command.Context) -> None:
