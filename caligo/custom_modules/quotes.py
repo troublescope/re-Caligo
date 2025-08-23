@@ -2,7 +2,6 @@ import base64
 from io import BytesIO
 from typing import ClassVar
 
-import requests
 from pyrogram import errors
 from pyrogram.types import Message
 
@@ -55,12 +54,18 @@ class Quote(module.Module):
         }
 
         url = "https://quotes.fl1yd.su/generate"
-        resp = requests.post(url, json=payload)
-        if not resp.ok:
-            await wait_msg.edit(f"❌ Quote API error:\n<code>{resp.text}</code>")
+        try:
+            async with self.bot.http.post(url, json=payload) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    await wait_msg.edit(f"❌ Quote API error:\n<code>{text}</code>")
+                    return
+                content = await resp.read()
+        except Exception as e:
+            await wait_msg.edit(f"❌ Request failed: <code>{e}</code>")
             return
 
-        bio = BytesIO(resp.content)
+        bio = BytesIO(content)
         bio.name = f"quote.{ext}"
 
         try:
@@ -115,12 +120,18 @@ class Quote(module.Module):
         }
 
         url = "https://quotes.fl1yd.su/generate"
-        resp = requests.post(url, json=payload)
-        if not resp.ok:
-            await wait_msg.edit(f"❌ Quote API error:\n<code>{resp.text}</code>")
+        try:
+            async with self.bot.http.post(url, json=payload) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    await wait_msg.edit(f"❌ Quote API error:\n<code>{text}</code>")
+                    return
+                content = await resp.read()
+        except Exception as e:
+            await wait_msg.edit(f"❌ Request failed: <code>{e}</code>")
             return
 
-        bio = BytesIO(resp.content)
+        bio = BytesIO(content)
         bio.name = f"quote.{ext}"
 
         try:
