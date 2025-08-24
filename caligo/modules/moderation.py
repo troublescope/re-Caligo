@@ -57,7 +57,7 @@ class Moderation(module.Module):
         if not ctx.msg.reply_to_message:
             return "__Reply to a message.__"
 
-        await ctx.respond("Purging...")
+        await ctx.respond("__Purging...__")
 
         start_us = util_time.usec()
 
