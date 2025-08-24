@@ -140,7 +140,7 @@ class Reminders(module.Module):
 
                 if text:
                     await self.bot.client.send_message(
-                        target_chat, f"⏰ Reminder: {text}", schedule_date=when_utc
+                        target_chat, text, schedule_date=when_utc
                     )
                 elif ctx.reply_msg:
                     await self.bot.client.copy_message(
@@ -159,12 +159,15 @@ class Reminders(module.Module):
 
             if not silent:
                 first_run = (now + delta).astimezone(JAKARTA_TZ)
-                info = f"🔔 Reminder aktif!\n\n"
-                info += f"📅 Waktu pertama: {first_run.strftime('%A, %d %B %Y %H:%M:%S %Z')}\n"
-                info += f"⏳ Countdown: {human_delta(delta)}\n"
+                info = f"**🔔 Reminder aktif!**\n\n"
+                info += f"📅 **Waktu pertama:** {first_run.strftime('%A, %d %B %Y %H:%M:%S %Z')}\n"
+                info += f"⏳ **Countdown: **{human_delta(delta)}\n"
                 if count > 1:
-                    info += f"🔁 Akan diulang {count} kali setiap {human_delta(delta)}"
-                await ctx.respond(info)
+                    info += f"🔁 **Akan diulang** `{count}` **kali setiap** `{human_delta(delta)}`"
+                try:
+                    await ctx.respond(info)
+                except Exception:
+                    pass
             else:
                 await ctx.msg.delete()
 
