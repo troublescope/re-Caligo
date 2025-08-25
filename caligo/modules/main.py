@@ -110,7 +110,12 @@ class Main(module.Module):
                             types.InlineKeyboardButton(
                                 "📖️ Discussion", url="t.me/deltaDiscuss"
                             ),
-                        ]
+                        ],
+                        [
+                            types.InlineKeyboardButton(
+                                "ℹ️ Updates", url="https://execnow.t.me"
+                            )
+                        ],
                     ]
                 ),
             )
