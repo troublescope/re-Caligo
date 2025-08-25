@@ -11,20 +11,52 @@ from caligo.util import time as util_time
 class Moderation(module.Module):
     name: ClassVar[str] = "Moderation"
 
-    @command.desc("Mention everyone in this group (**DO NOT ABUSE**)")
-    @command.usage("[comment?]", optional=True)
-    async def cmd_everyone(
+    @command.desc("Mention everyone in this group with flexible targeting options")
+    @command.usage("[comment?] [--admins] [--members]", optional=True)
+    async def cmd_tagall(
         self,
         ctx: command.Context,
         *,
-        tag: str = "\U000e0020everyone",
-        user_filter: ChatMembersFilter = ChatMembersFilter.SEARCH,
+        tag: str = "everyone",
+        user_filter: Optional[ChatMembersFilter] = None,
     ) -> Optional[str]:
-        comment = ctx.input
+        comment = ctx.input.strip()
 
         if ctx.msg.chat.type == ChatType.PRIVATE:
             return "__This command can only be used in groups.__"
 
+        # Parse flags to determine target audience
+        has_admins_flag = "admins" in ctx.flags
+        has_members_flag = "members" in ctx.flags
+
+        # Determine filter and tag based on flags
+        if has_admins_flag:
+            target_filter = ChatMembersFilter.ADMINISTRATORS
+            tag = "admin"
+        elif has_members_flag:
+            target_filter = ChatMembersFilter.SEARCH
+            tag = "everyone"
+        else:
+            # No flags = everyone (default behavior)
+            target_filter = user_filter or ChatMembersFilter.SEARCH
+            if tag == "everyone":
+                tag = "everyone"
+
+        # Clean comment from flags if they exist
+        if comment:
+            # Remove flag arguments from comment
+            comment_parts = []
+            tokens = comment.split()
+
+            for token in tokens:
+                if not (
+                    token.startswith("-") and token.lstrip("-") in ["admins", "members"]
+                ):
+                    comment_parts.append(token)
+
+            comment = " ".join(comment_parts).strip()
+
+        # Build mention text
         mention_text = f"@{tag}"
         if comment:
             mention_text += " " + comment
@@ -34,9 +66,9 @@ class Moderation(module.Module):
         chat = ctx.msg.chat.id
         member: ChatMember
         async for member in self.bot.client.get_chat_members(
-            chat, filter=user_filter
+            chat, filter=target_filter
         ):  # type: ignore
-            mention_text += f"[\u200b](tg://user?id={member.user.id})"
+            mention_text += f"[\u200c](tg://user?id={member.user.id})"
 
             mention_slots -= 1
             if mention_slots == 0:
@@ -47,7 +79,7 @@ class Moderation(module.Module):
     @command.desc("Mention all admins in a group (**DO NOT ABUSE**)")
     @command.usage("[comment?]", optional=True)
     async def cmd_admin(self, ctx: command.Context) -> Optional[str]:
-        return await self.cmd_everyone(
+        return await self.cmd_tagall(
             ctx, tag="admin", user_filter=ChatMembersFilter.ADMINISTRATORS
         )
 
