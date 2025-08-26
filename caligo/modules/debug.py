@@ -265,6 +265,5 @@ class Debug(module.Module):
         scope = {}
         exec(compile(node, "<string>", "exec"), scope)
 
-        coro = scope[name]
-        args = self.scopes.values()
-        return await coro(*args)
+        coro = await scope[name](*self.scopes.values())
+        return await coro if hasattr(coro, "__await__") else coro
