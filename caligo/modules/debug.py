@@ -1,15 +1,15 @@
 import ast
+import asyncio
+import contextlib
+import html
 import inspect
 import io
 import os
 import re
 import sys
 import traceback
-from contextlib import redirect_stdout
-from html import escape
-from typing import Any, ClassVar, Optional, Tuple
+from typing import Any, ClassVar, Dict, Optional, Tuple
 
-import aiopath
 import pyrogram
 from aiopath import AsyncPath
 from pyrogram import filters
@@ -22,232 +22,124 @@ from pyrogram.types import (
     InputTextMessageContent,
 )
 
+import caligo
 from caligo import command, listener, module, util
-
-
-async def reval(
-    code: str, globs: dict, **kwargs
-) -> Tuple[Any, float, Optional[Exception]]:
-    locs: dict = {}
-    globs = globs.copy()
-
-    global_args = "_globs"
-    while global_args in globs or global_args in kwargs:
-        global_args = "_" + global_args
-
-    kwargs[global_args] = {
-        k: globs.get(k) for k in ("__name__", "__package__") if k in globs
-    }
-
-    root = ast.parse(code, mode="exec")
-    code_body = root.body
-
-    if not code_body:
-        return None, 0.0, None
-
-    ret_name = "_ret"
-    while ret_name in globs or any(
-        isinstance(n, ast.Name) and n.id == ret_name for n in ast.walk(root)
-    ):
-        ret_name = "_" + ret_name
-
-    ret_list = ast.Assign(
-        targets=[ast.Name(id=ret_name, ctx=ast.Store())],
-        value=ast.List(elts=[], ctx=ast.Load()),
-    )
-    ast.fix_missing_locations(ret_list)
-
-    inject_globals = ast.Expr(
-        ast.Call(
-            func=ast.Attribute(
-                value=ast.Call(
-                    func=ast.Name("globals", ast.Load()), args=[], keywords=[]
-                ),
-                attr="update",
-                ctx=ast.Load(),
-            ),
-            args=[],
-            keywords=[
-                ast.keyword(arg=None, value=ast.Name(id=global_args, ctx=ast.Load()))
-            ],
-        )
-    )
-    ast.fix_missing_locations(inject_globals)
-
-    if not any(isinstance(n, ast.Return) for n in code_body):
-        for i, stmt in enumerate(code_body):
-            if isinstance(stmt, ast.Expr) and (
-                i == len(code_body) - 1 or not isinstance(stmt.value, ast.Call)
-            ):
-                code_body[i] = ast.Expr(
-                    value=ast.Call(
-                        func=ast.Attribute(
-                            value=ast.Name(id=ret_name, ctx=ast.Load()),
-                            attr="append",
-                            ctx=ast.Load(),
-                        ),
-                        args=[stmt.value],
-                        keywords=[],
-                    )
-                )
-                ast.fix_missing_locations(code_body[i])
-    else:
-        for stmt in code_body:
-            if isinstance(stmt, ast.Return) and stmt.value:
-                stmt.value = ast.List(elts=[stmt.value], ctx=ast.Load())
-                ast.fix_missing_locations(stmt)
-
-    code_body.append(ast.Return(value=ast.Name(id=ret_name, ctx=ast.Load())))
-    ast.fix_missing_locations(code_body[-1])
-
-    arguments = ast.arguments(
-        posonlyargs=[],
-        args=[],
-        vararg=None,
-        kwonlyargs=[ast.arg(arg=k) for k in kwargs],
-        kw_defaults=[None] * len(kwargs),
-        kwarg=None,
-        defaults=[],
-    )
-
-    func_def = ast.AsyncFunctionDef(
-        name="__reval_func__",
-        args=arguments,
-        body=[inject_globals, ret_list] + code_body,
-        decorator_list=[],
-    )
-    ast.fix_missing_locations(func_def)
-
-    mod = ast.Module(body=[func_def], type_ignores=[])
-    compiled = compile(mod, filename="<reval>", mode="exec")
-
-    exec(compiled, {}, locs)
-
-    start = util.time.usec()
-    try:
-        result = await locs["__reval_func__"](**kwargs)
-        end = util.time.usec()
-        elapsed = end - start
-
-        if isinstance(result, list):
-            result = [await r if hasattr(r, "__await__") else r for r in result]
-            result = [r for r in result if r is not None]
-            if len(result) == 1:
-                return result[0], elapsed, None
-            elif not result:
-                return None, elapsed, None
-            return result, elapsed, None
-
-        return result, elapsed, None
-
-    except Exception as e:
-        end = util.time.usec()
-        elapsed = end - start
-        return None, elapsed, e
 
 
 class Debug(module.Module):
     name: ClassVar[str] = "Debug"
 
+    tasks: Dict[Tuple[int, int], asyncio.Task[Any]]
+    scopes: Dict[str, Any]
+
     async def on_load(self):
-        self._log_cache = ""
+        self.tasks = dict()
+        self.scopes = {
+            "asyncio": asyncio,
+            "contextlib": contextlib,
+            "inspect": inspect,
+            "io": io,
+            "os": os,
+            "re": re,
+            "sys": sys,
+            "traceback": traceback,
+            #
+            "caligo": caligo,
+            "pyrogram": pyrogram,
+            "raw": pyrogram.raw,
+            "enums": pyrogram.enums,
+            "types": pyrogram.types,
+            #
+            "self": self,
+            "bot": self.bot,
+        }
 
     @command.desc("Evaluate code")
     @command.usage("[code snippet]")
     @command.alias("exec", "e")
     async def cmd_eval(self, ctx: command.Context) -> Optional[str]:
-        if not ctx.input:
-            return "Give me code to evaluate."
+        code = ctx.input
+        if not code:
+            return "Give me code to evaluate"
 
-        code = ctx.msg.content.markdown.split(maxsplit=1)[1]
-        out_buf = io.StringIO()
+        await ctx.respond(f"<code>{html.escape(code)}</code>\n\n<b>Running...</b>")
 
-        async def send(*args: Any, **kwargs: Any) -> pyrogram.types.Message:
-            return await ctx.msg.reply(*args, **kwargs)
-
-        def _print(*args: Any, **kwargs: Any) -> None:
-            if "file" not in kwargs:
-                kwargs["file"] = out_buf
-            return print(*args, **kwargs)
-
-        eval_vars = {
-            "self": self,
-            "ctx": ctx,
-            "bot": self.bot,
-            "loop": self.bot.loop,
-            "client": self.bot.client,
-            "helper": self.bot.client_helper,
-            "commands": self.bot.commands,
-            "listeners": self.bot.listeners,
-            "modules": self.bot.modules,
-            "stdout": out_buf,
-            "context": ctx,
-            "msg": ctx.msg,
-            "message": ctx.msg,
-            "db": self.bot.db,
-            "http": self.bot.http,
-            "replied": ctx.reply_msg,
-            "user": (ctx.reply_msg or ctx.msg).from_user,
-            "send": send,
-            "print": _print,
-            "inspect": inspect,
-            "os": os,
-            "re": re,
-            "reval": reval,
-            "sys": sys,
-            "traceback": traceback,
-            "pyrogram": pyrogram,
-            "enums": pyrogram.enums,
-            "types": pyrogram.types,
-            "raw": pyrogram.raw,
-            "path": aiopath.AsyncPath,
-            "command": command,
-            "module": module,
-            "util": util,
-        }
+        self.scopes["ctx"] = ctx
 
         start_time = util.time.usec()
-        try:
-            with redirect_stdout(out_buf):
-                result, elapsed, exception = await reval(code, globals(), **eval_vars)
-                prefix = "" if exception is None else "⚠️ Error executing snippet\n\n"
-                if exception is not None:
-                    result = str(exception)
-        except Exception as e:
-            end_time = util.time.usec()
-            elapsed = end_time - start_time
-            prefix = "⚠️ Error executing snippet\n\n"
-            result = e
 
-        if not out_buf.getvalue() or result is not None:
-            print(result, file=out_buf)
+        out_buf = io.StringIO()
+        with contextlib.redirect_stdout(out_buf):
+            task = asyncio.create_task(self.exec_function(code))
+            self.tasks[(ctx.chat.id, ctx.msg.id)] = task
+            try:
+                result = await task
+                output = out_buf.getvalue().rstrip() or str(result)
+            except (asyncio.CancelledError, Exception):
+                exception = traceback.TracebackException(*sys.exc_info())
+                fmt_traceback = (
+                    "".join(
+                        traceback.format_list(
+                            [
+                                i
+                                for i in exception.stack
+                                if "site-packages" in i.filename
+                            ]
+                        )
+                    )
+                    or "  -"
+                )
+                output = (
+                    f"{exception.exc_type.__name__}:"
+                    f"\n  {exception._str if exception._str.strip() else '-'}"
+                    f"\n\nTraceback:\n{fmt_traceback}"
+                )
 
+        if code.endswith("return"):
+            return
+
+        elapsed = util.time.usec() - start_time
         el_str = util.time.format_duration_us(elapsed)
-        out = out_buf.getvalue()
-        if out.endswith("\n"):
-            out = out[:-1]
-        if not out.strip():
-            out = "[No Output]"
 
-        respond_text = f"""{prefix}Input:
-<code>{escape(code)}</code>\n
-Output:
-<code>{escape(out)}</code>\n
-<b>⏱ {el_str}</b>"""
+        respond_text = (
+            f"<b>Input:</b>\n<code>{html.escape(code)}</code>"
+            f"\n\n<b>Output:</b>\n<code>{html.escape(output)}</code>"
+            f"\n\n<b>{el_str}</b>"
+        )
 
         if len(respond_text) > 2048:
-            if len(out) > 1024:
+            if len(output) > 1024:
                 async with self.bot.http.post(
-                    "https://paste.rs", data=out.encode()
+                    "https://paste.rs", data=output.encode()
                 ) as resp:
                     paste_url = await resp.text()
-                respond_text = f"""{prefix}<b>In</b>:
-<code>{escape(code[:512] + '...' if len(code) > 1024 else code)}</code>\n
-Out:
-<code>{escape(out[:1024] + '...')}</code>\n
-<b><a href={paste_url}>⏱ {el_str}</a></b>"""
+                respond_text = (
+                    "<b>Input:</b>"
+                    f"\n<code>{html.escape(code[:512]) + '...' if len(code) > 1024 else html.escape(code)}</code>"
+                    "\n\n<b>Output:</b>"
+                    f"\n<code>{html.escape(output[:512]) + '...' if len(output) > 1024 else html.escape(output)}</code>"
+                    f"\n\n<b><a href={paste_url}>{el_str}</a></b>"
+                )
 
         await ctx.respond(respond_text, parse_mode=pyrogram.enums.ParseMode.HTML)
+
+    @command.desc("Cancel evaluation")
+    @command.usage("Reply to running task")
+    @command.alias("c")
+    async def cmd_cancel(self, ctx: command.Context) -> None:
+        if not ctx.reply_msg:
+            await ctx.respond("<i>Reply to an active task!</i>")
+            return
+
+        tasks = self.tasks.copy()
+        for (chat_id, msg_id), task in tasks.items():
+            if ctx.chat.id == chat_id and ctx.reply_msg.id == msg_id:
+                task.cancel()
+                self.tasks.pop((chat_id, msg_id), None)
+                await ctx.respond("Cancelled", delete_after=2.5)
+                break
+            else:
+                await ctx.respond("Reply to an active task!", delete_after=2.5)
 
     @command.desc("Show bot logs")
     @command.usage("[--lines N | --full] [--paste | -p] [--clear]")
@@ -339,3 +231,39 @@ Out:
         ]
 
         await query.answer(results=results, cache_time=0)
+
+    async def exec_function(self, code: str) -> Any:
+        body = ast.parse(code, "exec").body
+        if isinstance(body[-1], ast.Expr):
+            body[-1] = ast.Return(value=body[-1].value)
+
+        name = "executor"
+        node = ast.Module(
+            body=[
+                ast.AsyncFunctionDef(
+                    name=name,
+                    args=ast.arguments(
+                        posonlyargs=[],
+                        args=[ast.arg(arg=key) for key in self.scopes],
+                        vararg=None,
+                        kwonlyargs=[],
+                        kw_defaults=[],
+                        kwarg=None,
+                        defaults=[],
+                    ),
+                    body=body,
+                    decorator_list=[],
+                    returns=None,
+                    type_comments=[],
+                    type_params=[],
+                )
+            ],
+            type_ignores=[],
+        )
+        ast.fix_missing_locations(node)
+
+        scope = {}
+        exec(compile(node, "<string>", "exec"), scope)
+
+        coro = await scope[name](*self.scopes.values())
+        return await coro if hasattr(coro, "__await__") else coro
