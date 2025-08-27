@@ -1,6 +1,32 @@
 <h1 align="center">RE-CALIGO a.k.a (Returned Extended Caligo)</h1>
 <h3 align="center">A Modern, Powerful Userbot Framework — Rebuilt for the Next Era</h3>
 
+![project status: discontinued](https://img.shields.io/badge/status-discontinued-lightgrey.svg)
+
+# ⚠️ Project Discontinued Notice
+
+**Status:** ❌ This project will be officially discontinued on **31-08-2025**.  
+After this date, no new features or updates will be provided.  
+The repository will remain available as an archive for reference and for anyone who wishes to fork it.
+
+---
+
+## Why discontinued?
+- The current project structure could no longer support development needs.  
+- Because of this limitation, a **new project** will be created as the successor with a more suitable architecture.  
+- This repository will stay public as an archive.
+
+---
+
+## License & Copyright
+This repository remains under its original license.  
+Users and developers must comply with the license when forking or continuing the project.
+
+---
+
+
+**re-Caligo**
+
 A SelfBot for Telegram made with Python using [Pyrogram](https://github.com/pyrogram/pyrogram) library. It's highly inspired from [pyrobud](https://github.com/kdrag0n/pyrobud) that writtens in [Telethon](https://github.com/LonamiWebs/Telethon) library.
 It's the same but different, you know what i mean?
 
