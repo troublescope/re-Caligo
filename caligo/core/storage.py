@@ -359,3 +359,21 @@ class PersistentStorage(Storage):
             is_bot,
         )
         return base64.urlsafe_b64encode(packed).decode().rstrip("=")
+
+    async def list_peer_ids(self) -> list[int]:
+
+        cursor = self._peer.find({}, {"_id": 1})
+        return [doc["_id"] async for doc in cursor]
+
+    async def list_usernames(self) -> list[str]:
+
+        cursor = self._usernames.find({}, {"username": 1})
+        return [doc["username"] async for doc in cursor]
+
+    async def list_peers(self) -> list[tuple[int, int, str]]:
+
+        cursor = self._peer.find({}, {"_id": 1, "access_hash": 1, "type": 1})
+        return [
+            (doc["_id"], doc.get("access_hash", 0), doc.get("type", ""))
+            async for doc in cursor
+        ]
