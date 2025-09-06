@@ -1,12 +1,9 @@
 import asyncio
-import mimetypes
-import os
 import re
 import shutil
 import tempfile
 import uuid
 from typing import ClassVar
-from urllib.parse import parse_qs, unquote, urlparse
 
 from aiopath import AsyncPath
 from PIL import Image
@@ -15,301 +12,300 @@ from pyrogram import errors, filters, types
 from caligo import command, listener, module, util
 
 
-def extract_filename(download_url: str, index: int, content_type: str = None) -> str:
-    parsed = urlparse(download_url)
-    query = parse_qs(parsed.query)
-    original_filename = unquote(query.get("filename", [f"media_{index}"])[0])
-
-    ext = None
-    if content_type:
-        ext = mimetypes.guess_extension(content_type.split(";")[0].strip())
-    if not ext and "." in parsed.path:
-        ext = os.path.splitext(parsed.path)[1].lower()
-    if not ext and "." in original_filename:
-        ext = os.path.splitext(original_filename)[1].lower()
-    if not ext:
-        ext = ".jpg"
-    if "?" in ext:
-        ext = ext.split("?")[0]
-    if not ext.startswith("."):
-        ext = "." + ext
-    return f"media_{index}{ext}"
-
-
-# Regex that matches full Instagram URLs
-INSTAGRAM_REGEX = r"(https?://(?:www\.)?(?:instagram\.com|instagr\.am)/[^\s]+)"
-
-
 class InstaDL(module.Module):
-    name: ClassVar = "InstaDL"
+    name: ClassVar[str] = "InstaDL"
+    INSTAGRAM_REGEX: ClassVar[str] = (
+        r"(https?://(?:www\.)?(?:instagram\.com|instagr\.am)/[^\s]+)"
+    )
+    API_URL: ClassVar[str] = "https://fastdl.live/api/search"
 
     async def on_load(self):
         self.downloads_dir = AsyncPath(
             self.bot.config.get("bot", {}).get("download_path", "downloads")
         )
         await self.downloads_dir.mkdir(parents=True, exist_ok=True)
-        self._cache = {}
+        self._cache: dict[str, dict] = {}
 
-    async def fetch_media(self, url: str):
-        api_url = "https://fastdl.live/api/search"
+    async def _fetch_media(self, url: str) -> list[dict]:
         payload = {"url": url}
-
         async with self.bot.http.post(
-            api_url, json=payload, headers={"Content-Type": "application/json"}
+            self.API_URL, json=payload, headers={"Content-Type": "application/json"}
         ) as resp:
             if resp.status != 200:
                 raise RuntimeError(f"API failed HTTP {resp.status}")
             data = await resp.json()
-
         if not data.get("success") or not data.get("result"):
             raise ValueError("No media found or invalid URL")
+        return [
+            {
+                "id": i,
+                "type": item["type"].lower(),
+                "downloadLink": item["downloadLink"],
+                "tmp": f"media_{i}_tmp",
+            }
+            for i, item in enumerate(data["result"], start=1)
+        ]
 
-        media_list = []
-        for idx, item in enumerate(data["result"], start=1):
-            media_list.append(
-                {
-                    "id": idx,
-                    "type": item["type"].lower(),
-                    "downloadLink": item["downloadLink"],
-                    "temp_filename": f"media_{idx}_temp",
-                }
-            )
-        return media_list
+    async def _download_media(self, items: list[dict]):
+        tmp_obj = tempfile.TemporaryDirectory()
+        tmp_dir = AsyncPath(tmp_obj.name)
 
-    async def download_media(self, media_list):
-        tmp_dir_obj = tempfile.TemporaryDirectory()
-        tmp_dir = AsyncPath(tmp_dir_obj.name)
-
-        async def download_item(item):
+        async def dl(item: dict):
             url = item["downloadLink"]
-            file_type = item["type"]
-            temp_path = tmp_dir / item["temp_filename"]
-
+            path_tmp = tmp_dir / item["tmp"]
             try:
-                async with self.bot.http.get(url) as resp:
-                    if resp.status != 200:
-                        self.bot.log.warning(
-                            f"Failed to download {url}: HTTP {resp.status}"
-                        )
-                        return None, None
-                    content_bytes = await resp.read()
-                    await temp_path.write_bytes(content_bytes)
+                async with self.bot.http.get(url) as r:
+                    if r.status != 200:
+                        self.bot.log.warning(f"DL fail {url}: {r.status}")
+                        return None
+                    await path_tmp.write_bytes(await r.read())
             except Exception as e:
-                self.bot.log.warning(f"Error downloading {url}: {e}")
-                return None, None
+                self.bot.log.warning(f"DL err {url}: {e}")
+                return None
 
-            if file_type == "video":
-                final_path = tmp_dir / f"media_{item['id']}.mp4"
-                await temp_path.rename(final_path)
+            ftype = item["type"]
+            final = (
+                tmp_dir / f"media_{item['id']}{'.mp4' if ftype == 'video' else '.jpg'}"
+            )
+            if ftype == "video":
+                await path_tmp.rename(final)
             else:
-                final_path = tmp_dir / f"media_{item['id']}.jpg"
                 try:
-                    img = await util.run_sync(Image.open, str(temp_path))
+                    img = await util.run_sync(Image.open, str(path_tmp))
                     img = img.convert("RGB")
-                    await util.run_sync(img.save, str(final_path), "JPEG")
-                    await temp_path.unlink(missing_ok=True)
+                    await util.run_sync(img.save, str(final), "JPEG")
+                    await path_tmp.unlink(missing_ok=True)
                 except Exception as e:
-                    self.bot.log.warning(f"Failed to convert image {temp_path}: {e}")
-                    await temp_path.rename(final_path)
+                    self.bot.log.warning(f"IMG convert fail {path_tmp}: {e}")
+                    await path_tmp.rename(final)
+            return str(final), ftype
 
-            return final_path, file_type
+        results = [r for r in await asyncio.gather(*(dl(x) for x in items)) if r]
+        files, types_ = zip(*results) if results else ([], [])
+        return list(files), list(types_), tmp_obj
 
-        results = await asyncio.gather(*(download_item(item) for item in media_list))
-        media_files, media_types = zip(*[r for r in results if r and r[0]])
-        return list(media_files), list(media_types), tmp_dir_obj
-
-    async def cache_files(self, media_files, media_types):
-        async def cache_item(path, file_type):
+    async def _cache_files(
+        self, files: list[str], types_: list[str]
+    ) -> list[str | None]:
+        async def cache_one(path: str, t: str):
             try:
-                if file_type == "video":
+                if t == "video":
                     msg = await self.bot.client_helper.send_video(
-                        self.bot.log_chat, video=str(path), disable_notification=True
+                        self.bot.log_chat, video=path, disable_notification=True
                     )
-                    file_id = msg.video.file_id
+                    fid = msg.video.file_id
                 else:
                     msg = await self.bot.client_helper.send_photo(
-                        self.bot.log_chat, photo=str(path), disable_notification=True
+                        self.bot.log_chat, photo=path, disable_notification=True
                     )
-                    file_id = msg.photo.file_id
+                    fid = msg.photo.file_id
                 try:
                     await msg.delete()
                 except errors.FloodWait as e:
                     await asyncio.sleep(e.value)
-                return file_id
+                return fid
             except Exception as e:
-                self.bot.log.warning(f"Failed to cache {path}: {e}")
+                self.bot.log.warning(f"Cache fail {path}: {e}")
                 return None
 
-        return await asyncio.gather(
-            *(cache_item(path, t) for path, t in zip(media_files, media_types))
-        )
+        return await asyncio.gather(*(cache_one(p, t) for p, t in zip(files, types_)))
 
-    def build_nav_buttons(self, uid: str, index: int, total: int):
-        prev_index = (index - 1) % total
-        next_index = (index + 1) % total
-
+    def _nav(self, uid: str, idx: int, total: int) -> types.InlineKeyboardMarkup:
+        prev_i = (idx - 1) % total
+        next_i = (idx + 1) % total
         row1 = [
-            types.InlineKeyboardButton(
-                "«", callback_data=f"instadl({uid}:{prev_index})"
-            ),
-            types.InlineKeyboardButton(f"{index+1}/{total}", callback_data="noop"),
-            types.InlineKeyboardButton(
-                "»", callback_data=f"instadl({uid}:{next_index})"
-            ),
+            types.InlineKeyboardButton("«", callback_data=f"instadl({uid}:{prev_i})"),
+            types.InlineKeyboardButton(f"{idx+1}/{total}", callback_data="noop"),
+            types.InlineKeyboardButton("»", callback_data=f"instadl({uid}:{next_i})"),
         ]
         row2 = [types.InlineKeyboardButton("✗ Close", callback_data="menu(Close)")]
         return types.InlineKeyboardMarkup([row1, row2])
 
+    @staticmethod
+    def _chunks(seq, n):
+        for i in range(0, len(seq), n):
+            yield seq[i : i + n]
+
+    async def _send_album_chunked(self, chat_id: int, album: list[types.InputMedia]):
+        for chunk in self._chunks(album, 10):
+            if len(chunk) == 1:
+                m = chunk[0]
+                try:
+                    if isinstance(m, types.InputMediaVideo):
+                        await self.bot.client.send_video(
+                            chat_id,
+                            m.media,
+                            caption=m.caption,
+                            caption_entities=m.caption_entities,
+                        )
+                    else:
+                        await self.bot.client.send_photo(
+                            chat_id,
+                            m.media,
+                            caption=m.caption,
+                            caption_entities=m.caption_entities,
+                        )
+                except errors.FloodWait as e:
+                    await asyncio.sleep(e.value)
+                    if isinstance(m, types.InputMediaVideo):
+                        await self.bot.client.send_video(
+                            chat_id,
+                            m.media,
+                            caption=m.caption,
+                            caption_entities=m.caption_entities,
+                        )
+                    else:
+                        await self.bot.client.send_photo(
+                            chat_id,
+                            m.media,
+                            caption=m.caption,
+                            caption_entities=m.caption_entities,
+                        )
+                continue
+            try:
+                await self.bot.client.send_media_group(chat_id, chunk)
+            except errors.FloodWait as e:
+                await asyncio.sleep(e.value)
+                await self.bot.client.send_media_group(chat_id, chunk)
+
     @listener.priority(91)
     @listener.filters(filters.regex(r"^instadl:"))
-    async def on_inline_query(self, inline_query: types.InlineQuery):
+    async def on_inline_query(self, q: types.InlineQuery):
         try:
-            _, uid, idx = inline_query.query.split(":")
+            _, uid, idx = q.query.split(":")
             idx = int(idx)
         except Exception:
-            return await inline_query.answer(
+            return await q.answer(
                 [], switch_pm_text="Invalid query", switch_pm_parameter="err"
             )
 
         cache = self._cache.get(uid)
         if not cache:
-            return await inline_query.answer(
+            return await q.answer(
                 [], switch_pm_text="Expired ⌛", switch_pm_parameter="exp"
             )
 
-        file_ids, media_types = cache["file_ids"], cache["types"]
+        fids, types_ = cache["file_ids"], cache["types"]
+        if not fids or idx >= len(fids):
+            return await q.answer(
+                [], switch_pm_text="No media", switch_pm_parameter="nomedia"
+            )
 
-        results = []
-        if media_types[idx] == "video":
-            results.append(
+        res = []
+        if types_[idx] == "video":
+            res.append(
                 types.InlineQueryResultCachedVideo(
                     id=str(uuid.uuid4()),
-                    video_file_id=file_ids[idx],
+                    video_file_id=fids[idx],
                     title="Instagram Video",
-                    description=f"{idx+1}/{len(file_ids)}",
-                    reply_markup=self.build_nav_buttons(uid, idx, len(file_ids)),
+                    description=f"{idx+1}/{len(fids)}",
+                    reply_markup=self._nav(uid, idx, len(fids)),
                 )
             )
         else:
-            results.append(
+            res.append(
                 types.InlineQueryResultCachedPhoto(
                     id=str(uuid.uuid4()),
-                    photo_file_id=file_ids[idx],
+                    photo_file_id=fids[idx],
                     title="Instagram Photo",
-                    description=f"{idx+1}/{len(file_ids)}",
-                    reply_markup=self.build_nav_buttons(uid, idx, len(file_ids)),
+                    description=f"{idx+1}/{len(fids)}",
+                    reply_markup=self._nav(uid, idx, len(fids)),
                 )
             )
-
-        await inline_query.answer(results, cache_time=0, is_personal=True)
+        await q.answer(res, cache_time=0, is_personal=True)
 
     @listener.filters(filters.regex(r"^instadl"))
-    async def on_callback_query(self, query: types.CallbackQuery):
-        data = query.data
+    async def on_callback_query(self, cq: types.CallbackQuery):
+        if not cq.data.startswith("instadl("):
+            return
+        try:
+            uid, idx = cq.data[8:-1].split(":")
+            idx = int(idx)
+        except Exception:
+            return await cq.answer("Invalid data", show_alert=True)
 
-        if data.startswith("instadl("):
-            try:
-                uid, idx = data[8:-1].split(":")
-                idx = int(idx)
-            except Exception:
-                return await query.answer("Invalid data", show_alert=True)
+        cache = self._cache.get(uid)
+        if not cache:
+            return await cq.answer("Expired ⌛", show_alert=True)
 
-            cache = self._cache.get(uid)
-            if not cache:
-                return await query.answer("Expired ⌛", show_alert=True)
+        fids, types_ = cache["file_ids"], cache["types"]
+        total = len(fids)
+        if not total:
+            return await cq.answer("No media", show_alert=True)
 
-            file_ids, media_types = cache["file_ids"], cache["types"]
-            total = len(file_ids)
-
-            try:
-                if media_types[idx] == "video":
-                    media = types.InputMediaVideo(file_ids[idx])
-                else:
-                    media = types.InputMediaPhoto(file_ids[idx])
-
-                await query.edit_message_media(
-                    media, reply_markup=self.build_nav_buttons(uid, idx, total)
-                )
-            except errors.MessageNotModified:
-                pass
-            except errors.FloodWait as e:
-                await asyncio.sleep(e.value)
+        try:
+            media = (
+                types.InputMediaVideo(fids[idx])
+                if types_[idx] == "video"
+                else types.InputMediaPhoto(fids[idx])
+            )
+            await cq.edit_message_media(media, reply_markup=self._nav(uid, idx, total))
+        except errors.MessageNotModified:
+            pass
+        except errors.FloodWait as e:
+            await asyncio.sleep(e.value)
 
     @command.desc("Download Instagram video/reel/photo (supports multipost)")
     @command.usage("<instagram link> [-i for inline mode]")
     async def cmd_instadl(self, ctx: command.Context):
-        text = ctx.input.strip()
+        txt = ctx.input.strip()
         inline_mode = "-i" in ctx.flags or ctx.flags.get("i") is True
 
         await ctx.respond("...")
 
-        match = re.search(INSTAGRAM_REGEX, text)
-        if not match:
+        m = re.search(self.INSTAGRAM_REGEX, txt)
+        if not m:
             return "Please provide a valid Instagram URL."
+        url = m.group(1)
 
-        url = match.group(1)
-
-        tmp_dir_obj = None
+        tmp_obj = None
         try:
-            media_list = await self.fetch_media(url)
-            media_files, media_types, tmp_dir_obj = await self.download_media(
-                media_list
-            )
+            items = await self._fetch_media(url)
+            files, types_, tmp_obj = await self._download_media(items)
 
-            # === INLINE MODE ===
             if inline_mode:
-                if len(media_files) == 1:
-                    if media_types[0] == "video":
-                        await ctx.msg.edit_media(
-                            types.InputMediaVideo(str(media_files[0]))
-                        )
-                    else:
-                        await ctx.msg.edit_media(
-                            types.InputMediaPhoto(str(media_files[0]))
-                        )
+                if len(files) == 1:
+                    media = (
+                        types.InputMediaVideo(files[0])
+                        if types_[0] == "video"
+                        else types.InputMediaPhoto(files[0])
+                    )
+                    await ctx.msg.edit_media(media)
                     return
-
-                file_ids = await self.cache_files(media_files, media_types)
+                fids = await self._cache_files(files, types_)
                 uid = str(uuid.uuid4())
-                self._cache[uid] = {
-                    "file_ids": file_ids,
-                    "types": media_types,
-                    "media_files": media_files,
-                    "tmp_dir_obj": tmp_dir_obj,
-                }
-
+                self._cache[uid] = {"file_ids": fids, "types": types_, "tmp": tmp_obj}
                 results = await self.bot.client.get_inline_bot_results(
                     self.bot.client_helper.me.username, f"instadl:{uid}:0"
                 )
-
                 await self.bot.client.send_inline_bot_result(
                     ctx.chat.id, results.query_id, results.results[0].id
                 )
                 await ctx.msg.delete()
                 return
 
-            album = []
-            for idx, path in enumerate(media_files):
-                if media_types[idx] == "video":
-                    album.append(types.InputMediaVideo(media=str(path)))
-                else:
-                    album.append(types.InputMediaPhoto(media=str(path)))
-
+            album: list[types.InputMedia] = [
+                (
+                    types.InputMediaVideo(media=f)
+                    if types_[i] == "video"
+                    else types.InputMediaPhoto(media=f)
+                )
+                for i, f in enumerate(files)
+            ]
             if not album:
                 return "No valid media to send."
 
             if len(album) == 1:
                 await ctx.msg.edit_media(album[0])
             else:
-                await self.bot.client.send_media_group(ctx.chat.id, album)
+                await self._send_album_chunked(ctx.chat.id, album)
                 await ctx.msg.delete()
 
         except Exception as e:
             return f"Error: {e}"
-
         finally:
-            if tmp_dir_obj:
+            if tmp_obj:
                 try:
-                    await asyncio.to_thread(shutil.rmtree, tmp_dir_obj.name)
+                    await asyncio.to_thread(shutil.rmtree, tmp_obj.name)
                 except Exception:
                     pass
