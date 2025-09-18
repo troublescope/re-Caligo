@@ -1325,14 +1325,14 @@ zstd = ["zstandard"]
 
 [[package]]
 name = "pyrotgfork"
-version = "2.2.15"
+version = "2.2.16"
 description = "Fork of Pyrogram. Elegant, modern and asynchronous Telegram MTProto API framework in Python for users and bots"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "pyrotgfork-2.2.15-py3-none-any.whl", hash = "sha256:c5033d3c6e88db2e2e4d90f286e845f027598cee6317419e494c697f5b4d0fcb"},
-    {file = "pyrotgfork-2.2.15.tar.gz", hash = "sha256:b1694fa5bd81e5bdad8bb0a898764e22ebc5ca269bf3b74bb4de47fc2711cddd"},
+    {file = "pyrotgfork-2.2.16-py3-none-any.whl", hash = "sha256:33e5b24601d7c2cb6ed801d14038949f83d4af1ae574b2786dd855964b741f2d"},
+    {file = "pyrotgfork-2.2.16.tar.gz", hash = "sha256:980fbcec0b7f2ccade4d770b1f84cab1199cd2cff56d9c15149a5e8cd9e8c833"},
 ]
 
 [package.dependencies]
@@ -1794,4 +1794,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "daf43ccd2436619d1830aceae1facf281b7b0fedc387f0b5eba44fdbe0e38a81"
+content-hash = "14cd1213047fe98c6db80487e1b60d1288a6ce579ec1a5cf5dfaab3e4d05d55b"
